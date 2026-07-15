@@ -1,15 +1,15 @@
-export type AppRouteHref = '/' | '/briefings' | '/groups' | '/messages' | '/more';
+import type { Href } from 'expo-router';
 
 export type NavItem = {
   name: 'home' | 'briefings' | 'groups' | 'messages' | 'more';
-  href: AppRouteHref;
+  href: Href;
   label: string;
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
   {
     name: 'home',
-    href: '/',
+    href: '/' as Href,
     label: 'Home',
   },
   {
@@ -35,3 +35,4 @@ export const NAV_ITEMS: readonly NavItem[] = [
 ];
 
 export const PRODUCT_NAME = 'Blue Briefing';
+export const APP_HOME_HREF = '/' as Href;

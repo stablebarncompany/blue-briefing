@@ -31,7 +31,7 @@ export function TopBar({ title }: TopBarProps) {
           </AppText>
         ) : null}
       </View>
-      <SecurityStatus />
+      <SecurityStatus label="Agency access pending" tone="warning" />
     </View>
   );
 }

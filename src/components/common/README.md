@@ -9,7 +9,12 @@ Keep components small, typed, and theme-driven. Do not hardcode colors; import v
 - `AppText` — themed text
 - `AppButton` — primary / secondary / ghost actions
 - `AppCard` — bordered surface panels
-- `IconButton` — compact icon press target
-- `SecurityStatus` — green “Agency Secure” indicator
+- `IconButton` — compact press target
+- `SecurityStatus` — membership/security indicator chip
 - `SectionLabel` — uppercase section eyebrow
 - `EmptyState` — spacious placeholder card
+- `AuthScreenLayout` — keyboard-safe auth page chrome
+- `FormField` — labeled text input
+- `PasswordField` — password input with show/hide
+- `BrandedLoadingScreen` — session bootstrap loading state
+- `InlineFormMessage` — inline form success/error/info

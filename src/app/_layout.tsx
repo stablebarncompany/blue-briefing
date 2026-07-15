@@ -1,12 +1,12 @@
 import '@/global.css';
 
-import { DarkTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
 import { StyleSheet, View } from 'react-native';
 
-import { AppShell } from '@/components/layout';
-import { NAV_ITEMS } from '@/constants/navigation';
+import { BrandedLoadingScreen } from '@/components/common';
+import { useAuth } from '@/hooks/use-auth';
+import { AuthProvider } from '@/services/auth';
 import { colors } from '@/theme';
 
 const navigationTheme = {
@@ -24,20 +24,34 @@ const navigationTheme = {
 export default function RootLayout() {
   return (
     <ThemeProvider value={navigationTheme}>
-      <StatusBar style="light" />
-      <View style={styles.root}>
-        <Tabs>
-          <AppShell>
-            <TabSlot style={styles.slot} />
-          </AppShell>
-          <TabList style={styles.hiddenTabList}>
-            {NAV_ITEMS.map((item) => (
-              <TabTrigger key={item.name} name={item.name} href={item.href} />
-            ))}
-          </TabList>
-        </Tabs>
-      </View>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <View style={styles.root}>
+          <RootNavigator />
+        </View>
+      </AuthProvider>
     </ThemeProvider>
+  );
+}
+
+function RootNavigator() {
+  const { session, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <BrandedLoadingScreen />;
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: styles.stackContent }}>
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="(app)" />
+        <Stack.Screen name="pending-access" />
+      </Stack.Protected>
+
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
   );
 }
 
@@ -46,12 +60,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  slot: {
-    flex: 1,
-    height: '100%',
+  stackContent: {
     backgroundColor: colors.background,
-  },
-  hiddenTabList: {
-    display: 'none',
   },
 });

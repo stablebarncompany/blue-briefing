@@ -1,18 +1,25 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { AppText } from '@/components/common/AppText';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, type ColorToken } from '@/theme';
 
 export type SecurityStatusProps = {
   label?: string;
+  tone?: 'success' | 'warning';
   style?: StyleProp<ViewStyle>;
 };
 
-export function SecurityStatus({ label = 'Agency Secure', style }: SecurityStatusProps) {
+export function SecurityStatus({
+  label = 'Agency access pending',
+  tone = 'warning',
+  style,
+}: SecurityStatusProps) {
+  const color: ColorToken = tone === 'success' ? 'success' : 'warning';
+
   return (
     <View style={[styles.container, style]} accessibilityRole="text">
-      <View style={styles.dot} />
-      <AppText variant="caption" color="success">
+      <View style={[styles.dot, { backgroundColor: colors[color] }]} />
+      <AppText variant="caption" color={color}>
         {label}
       </AppText>
     </View>
@@ -35,6 +42,5 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: radius.full,
-    backgroundColor: colors.success,
   },
 });
