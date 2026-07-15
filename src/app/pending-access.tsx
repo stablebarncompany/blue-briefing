@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -8,14 +7,18 @@ import {
   AuthScreenLayout,
   InlineFormMessage,
 } from '@/components/common';
-import { APP_HOME_HREF } from '@/constants/navigation';
+import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
 import { spacing } from '@/theme';
 
 export default function PendingAccessScreen() {
   const { signOut, user } = useAuth();
+  const { memberships, error, refreshAgencyContext } = useAgency();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const pendingCount = memberships.filter((item) => item.status === 'pending').length;
 
   async function onSignOut() {
     if (signingOut) {
@@ -33,6 +36,19 @@ export default function PendingAccessScreen() {
     }
   }
 
+  async function onRefresh() {
+    if (refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    setErrorMessage(null);
+    try {
+      await refreshAgencyContext();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <AuthScreenLayout
       title="Agency access pending"
@@ -43,16 +59,34 @@ export default function PendingAccessScreen() {
         </AppText>
       ) : null}
 
+      {pendingCount > 0 ? (
+        <AppText variant="body" color="textMuted">
+          You have {pendingCount} pending membership request{pendingCount === 1 ? '' : 's'}. An
+          administrator must activate access before you can enter the agency workspace.
+        </AppText>
+      ) : (
+        <AppText variant="body" color="textMuted">
+          No active agency membership was found for this account.
+        </AppText>
+      )}
+
+      {error ? <InlineFormMessage message={error} /> : null}
       {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
 
       <View style={styles.actions}>
-        <AppButton label="Continue to app" onPress={() => router.replace(APP_HOME_HREF)} />
+        <AppButton
+          label="Refresh membership"
+          variant="secondary"
+          onPress={onRefresh}
+          loading={refreshing}
+          disabled={refreshing || signingOut}
+        />
         <AppButton
           label="Sign out"
           variant="ghost"
           onPress={onSignOut}
           loading={signingOut}
-          disabled={signingOut}
+          disabled={signingOut || refreshing}
         />
       </View>
     </AuthScreenLayout>

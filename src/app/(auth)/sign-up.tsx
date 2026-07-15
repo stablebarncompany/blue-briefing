@@ -10,6 +10,7 @@ import {
   InlineFormMessage,
   PasswordField,
 } from '@/components/common';
+import { APP_HOME_HREF } from '@/constants/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import {
   validateEmailField,
@@ -72,7 +73,7 @@ export default function SignUpScreen() {
         return;
       }
 
-      router.replace('/pending-access');
+      router.replace(APP_HOME_HREF);
     } finally {
       setSubmitting(false);
     }

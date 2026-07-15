@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/common/AppText';
 import { SecurityStatus } from '@/components/common/SecurityStatus';
 import { PRODUCT_NAME } from '@/constants/navigation';
+import { useAgency } from '@/hooks/use-agency';
 import { useIsWideLayout } from '@/hooks/use-is-wide-layout';
 import { colors, layout, spacing } from '@/theme';
 
@@ -14,6 +15,16 @@ export type TopBarProps = {
 export function TopBar({ title }: TopBarProps) {
   const insets = useSafeAreaInsets();
   const isWide = useIsWideLayout();
+  const { currentAgency, currentMembership, isLoading } = useAgency();
+
+  const hasActiveContext = !!currentAgency && !!currentMembership && !isLoading;
+  const statusLabel = hasActiveContext
+    ? currentAgency.name
+    : isLoading
+      ? 'Loading agency…'
+      : 'Agency access pending';
+  const statusTone = hasActiveContext ? 'success' : 'warning';
+  const securityLabel = hasActiveContext ? 'Agency Secure' : statusLabel;
 
   return (
     <View
@@ -27,11 +38,15 @@ export function TopBar({ title }: TopBarProps) {
         <AppText variant="title">{title ?? PRODUCT_NAME}</AppText>
         {!isWide ? (
           <AppText variant="caption" color="textMuted">
-            Stay ready for the next watch
+            {hasActiveContext ? statusLabel : 'Stay ready for the next watch'}
+          </AppText>
+        ) : hasActiveContext ? (
+          <AppText variant="caption" color="textMuted">
+            {statusLabel}
           </AppText>
         ) : null}
       </View>
-      <SecurityStatus label="Agency access pending" tone="warning" />
+      <SecurityStatus label={securityLabel} tone={statusTone} />
     </View>
   );
 }

@@ -151,8 +151,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       user,
       isLoading,
-      // Agency membership is not implemented yet — keep this flag for the next guard phase.
-      hasAgencyAccess: false,
       signIn,
       signUp,
       signOut,

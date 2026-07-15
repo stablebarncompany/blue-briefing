@@ -22,11 +22,6 @@ export type AuthContextValue = {
   session: Session | null;
   user: User | null;
   isLoading: boolean;
-  /**
-   * Placeholder until agency membership exists.
-   * Always false in this phase — keep checks centralized for the next guard iteration.
-   */
-  hasAgencyAccess: boolean;
   signIn: (input: SignInInput) => Promise<AuthActionResult>;
   signUp: (input: SignUpInput) => Promise<AuthActionResult>;
   signOut: () => Promise<AuthActionResult>;

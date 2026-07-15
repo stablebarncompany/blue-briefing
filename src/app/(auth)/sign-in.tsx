@@ -10,6 +10,7 @@ import {
   InlineFormMessage,
   PasswordField,
 } from '@/components/common';
+import { APP_HOME_HREF } from '@/constants/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { validateEmailField, validatePasswordField } from '@/services/auth';
 import { spacing } from '@/theme';
@@ -45,7 +46,8 @@ export default function SignInScreen() {
         setFormError(result.errorMessage);
         return;
       }
-      router.replace('/pending-access');
+      // Route guards send the user to pending-access, select-agency, or the app shell.
+      router.replace(APP_HOME_HREF);
     } finally {
       setSubmitting(false);
     }

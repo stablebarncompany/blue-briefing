@@ -19,4 +19,6 @@ Copy `.env.example` to `.env` and fill in values for local development. Never co
 
 ## Row Level Security
 
-Database access must later be protected with Supabase Row Level Security from the beginning. Every operational record must include an `agency_id`, and users must only reach agencies and groups they are authorized to access.
+Database access must be protected with Supabase Row Level Security. Apply migrations under `supabase/migrations/` before relying on membership queries.
+
+Every operational record must include an `agency_id` where applicable, and users must only reach agencies and groups they are authorized to access.
