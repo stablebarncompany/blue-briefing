@@ -1,18 +1,57 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import '@/global.css';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { DarkTheme, ThemeProvider } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
+import { StyleSheet, View } from 'react-native';
 
-SplashScreen.preventAutoHideAsync();
+import { AppShell } from '@/components/layout';
+import { NAV_ITEMS } from '@/constants/navigation';
+import { colors } from '@/theme';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.surface,
+    border: colors.border,
+    primary: colors.primary,
+    text: colors.text,
+  },
+};
+
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+    <ThemeProvider value={navigationTheme}>
+      <StatusBar style="light" />
+      <View style={styles.root}>
+        <Tabs>
+          <AppShell>
+            <TabSlot style={styles.slot} />
+          </AppShell>
+          <TabList style={styles.hiddenTabList}>
+            {NAV_ITEMS.map((item) => (
+              <TabTrigger key={item.name} name={item.name} href={item.href} />
+            ))}
+          </TabList>
+        </Tabs>
+      </View>
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  slot: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: colors.background,
+  },
+  hiddenTabList: {
+    display: 'none',
+  },
+});

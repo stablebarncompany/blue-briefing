@@ -1,11 +1,11 @@
 import { EmptyState, SectionLabel } from '@/components/common';
 import { PageContainer } from '@/components/layout';
 
-export default function HomeScreen() {
+export default function MoreScreen() {
   return (
     <PageContainer>
-      <SectionLabel>Home</SectionLabel>
-      <EmptyState title="Good watch. Stay informed." />
+      <SectionLabel>More</SectionLabel>
+      <EmptyState title="Account & resources." />
     </PageContainer>
   );
 }

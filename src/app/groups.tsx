@@ -1,11 +1,11 @@
 import { EmptyState, SectionLabel } from '@/components/common';
 import { PageContainer } from '@/components/layout';
 
-export default function HomeScreen() {
+export default function GroupsScreen() {
   return (
     <PageContainer>
-      <SectionLabel>Home</SectionLabel>
-      <EmptyState title="Good watch. Stay informed." />
+      <SectionLabel>Groups</SectionLabel>
+      <EmptyState title="Invite-only channels." />
     </PageContainer>
   );
 }

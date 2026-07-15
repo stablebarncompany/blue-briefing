@@ -1,11 +1,11 @@
 import { EmptyState, SectionLabel } from '@/components/common';
 import { PageContainer } from '@/components/layout';
 
-export default function HomeScreen() {
+export default function BriefingsScreen() {
   return (
     <PageContainer>
-      <SectionLabel>Home</SectionLabel>
-      <EmptyState title="Good watch. Stay informed." />
+      <SectionLabel>Briefings</SectionLabel>
+      <EmptyState title="Searchable, acknowledged pass-ons for every watch." />
     </PageContainer>
   );
 }
