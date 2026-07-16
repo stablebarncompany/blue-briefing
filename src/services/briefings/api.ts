@@ -210,16 +210,31 @@ async function attachMeta(
   const briefingIds = briefings.map((item) => item.id);
 
   let acknowledgements: BriefingAcknowledgement[] = [];
-  if (briefingIds.length > 0) {
-    const { data, error } = await supabase
-      .from('briefing_acknowledgements')
-      .select('id, briefing_id, agency_id, user_id, acknowledged_at')
-      .in('briefing_id', briefingIds);
+  const attachmentCounts = new Map<string, number>();
 
-    if (error) {
-      throw new BriefingServiceError(error.message || 'Unable to load acknowledgements.');
+  if (briefingIds.length > 0) {
+    const [acksResult, attachmentsResult] = await Promise.all([
+      supabase
+        .from('briefing_acknowledgements')
+        .select('id, briefing_id, agency_id, user_id, acknowledged_at')
+        .in('briefing_id', briefingIds),
+      supabase.from('briefing_attachments').select('briefing_id').in('briefing_id', briefingIds),
+    ]);
+
+    if (acksResult.error) {
+      throw new BriefingServiceError(
+        acksResult.error.message || 'Unable to load acknowledgements.',
+      );
     }
-    acknowledgements = (data ?? []) as BriefingAcknowledgement[];
+    acknowledgements = (acksResult.data ?? []) as BriefingAcknowledgement[];
+
+    // Attachment metadata is optional until the attachments migration is applied.
+    if (!attachmentsResult.error) {
+      for (const row of attachmentsResult.data ?? []) {
+        const briefingId = String((row as { briefing_id: string }).briefing_id);
+        attachmentCounts.set(briefingId, (attachmentCounts.get(briefingId) ?? 0) + 1);
+      }
+    }
   }
 
   return briefings.map((briefing) => {
@@ -229,6 +244,7 @@ async function attachMeta(
       author: authors.get(briefing.author_id) ?? null,
       acknowledgement_count: related.length,
       acknowledged_by_me: related.some((ack) => ack.user_id === currentUserId),
+      attachment_count: attachmentCounts.get(briefing.id) ?? 0,
     };
   });
 }

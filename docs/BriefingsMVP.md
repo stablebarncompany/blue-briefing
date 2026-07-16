@@ -56,7 +56,7 @@ UI hides unauthorized controls. Supabase RLS is the enforcement boundary.
 
 ## Current MVP limitations
 
-- No file or photo attachments
+- Attachments are documented separately in `docs/BriefingAttachments.md`
 - No notifications or push alerts
 - No AI summaries
 - No scheduling / auto-expire
@@ -64,13 +64,3 @@ UI hides unauthorized controls. Supabase RLS is the enforcement boundary.
 - No soft-delete UI (hard delete allowed only for admin/command via RLS; no delete button in MVP UI)
 - Print is web-only (`window.print`)
 - Filter chips for shift/category appear after at least one briefing has those values
-
-## Future attachment support
-
-Planned direction (not built):
-
-1. Agency-scoped storage bucket with RLS tied to `agency_id`
-2. `briefing_attachments` table (`briefing_id`, `agency_id`, path, mime, size, uploaded_by`)
-3. Upload only through authenticated client with membership checks
-4. Never store service-role keys in the app
-5. Scan / retention policy defined by agency policy before enabling evidence-like files

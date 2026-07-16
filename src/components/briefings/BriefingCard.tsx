@@ -83,6 +83,9 @@ export function BriefingCard({ briefing, onPress }: BriefingCardProps) {
         <View style={styles.footer}>
           <AppText variant="caption" color="textSubtle">
             {briefing.acknowledgement_count} acknowledged
+            {briefing.attachment_count > 0
+              ? ` · ${briefing.attachment_count} attachment${briefing.attachment_count === 1 ? '' : 's'}`
+              : ''}
           </AppText>
           {briefing.requires_acknowledgement ? (
             <AppText

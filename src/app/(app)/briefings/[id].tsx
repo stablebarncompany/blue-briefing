@@ -3,6 +3,7 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import {
+  BriefingAttachmentsSection,
   BriefingFormFields,
   BriefingPriorityBadge,
   briefingFormToInput,
@@ -70,6 +71,7 @@ export default function BriefingDetailScreen() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState<BriefingFormValues | null>(null);
+  const [attachmentsRefreshKey, setAttachmentsRefreshKey] = useState(0);
 
   const role = currentMembership?.role;
   const canSupervise = canSuperviseBriefings(role);
@@ -103,6 +105,7 @@ export default function BriefingDetailScreen() {
       setBriefing(detail);
       setAcknowledgements(acks);
       setEditValues(toFormValues(detail));
+      setAttachmentsRefreshKey((value) => value + 1);
     } catch (error) {
       const message =
         error instanceof BriefingServiceError
@@ -294,6 +297,17 @@ export default function BriefingDetailScreen() {
           ) : null}
         </AppCard>
       )}
+
+      <AppCard style={styles.section}>
+        <BriefingAttachmentsSection
+          agencyId={currentAgency.id}
+          briefingId={briefing.id}
+          briefingStatus={briefing.status}
+          currentUserId={userId}
+          role={role}
+          refreshKey={attachmentsRefreshKey}
+        />
+      </AppCard>
 
       <AppCard style={styles.section}>
         <AppText variant="title">Acknowledgements</AppText>

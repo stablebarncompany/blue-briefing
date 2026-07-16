@@ -51,6 +51,7 @@ export type BriefingWithMeta = Briefing & {
   author: BriefingAuthor | null;
   acknowledgement_count: number;
   acknowledged_by_me: boolean;
+  attachment_count: number;
 };
 
 export type CreateBriefingInput = {

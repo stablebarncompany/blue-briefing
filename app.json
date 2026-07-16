@@ -33,7 +33,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Blue Briefing to attach photos to operational briefings."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

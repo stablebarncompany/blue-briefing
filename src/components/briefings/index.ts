@@ -1,3 +1,4 @@
+export { BriefingAttachmentsSection } from './BriefingAttachmentsSection';
 export { BriefingCard } from './BriefingCard';
 export { BriefingFiltersBar } from './BriefingFiltersBar';
 export {
@@ -7,3 +8,4 @@ export {
   type BriefingFormValues,
 } from './BriefingFormFields';
 export { BriefingPriorityBadge } from './BriefingPriorityBadge';
+export { PendingAttachmentsPanel } from './PendingAttachmentsPanel';
