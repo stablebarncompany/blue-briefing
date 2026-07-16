@@ -154,7 +154,7 @@ export function GroupPostCard({
             label="Reply"
             value={replyBody}
             onChangeText={setReplyBody}
-            placeholder="Write a reply. Use @All for now — notifications are not sent yet."
+            placeholder="Write a reply…"
             autoCapitalize="sentences"
             autoCorrect
             multiline

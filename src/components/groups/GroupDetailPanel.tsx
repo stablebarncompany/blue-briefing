@@ -379,7 +379,7 @@ export function GroupDetailPanel({
             label="New post"
             value={postBody}
             onChangeText={setPostBody}
-            placeholder="Share an update. Use @All for now — notifications are not sent yet."
+            placeholder="Share an update. Use @All to notify the group as a mention."
             autoCapitalize="sentences"
             autoCorrect
             multiline

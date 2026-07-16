@@ -14,10 +14,12 @@ import { PageContainer } from '@/components/layout';
 import {
   BRIEFINGS_CREATE_HREF,
   BRIEFINGS_HREF,
+  NOTIFICATIONS_HREF,
   briefingDetailHref,
 } from '@/constants/navigation';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
+import { useNotificationBadge } from '@/hooks/use-notification-badge';
 import {
   BriefingServiceError,
   getHomeBriefingSummary,
@@ -34,6 +36,8 @@ type HomeSummary = {
 export default function HomeScreen() {
   const { user } = useAuth();
   const { currentAgency } = useAgency();
+  const { unreadCount: unreadNotificationCount, refresh: refreshNotificationBadge } =
+    useNotificationBadge();
   const agencyId = currentAgency?.id ?? null;
   const userId = user?.id ?? null;
 
@@ -56,6 +60,7 @@ export default function HomeScreen() {
         currentUserId: userId,
       });
       setSummary(next);
+      await refreshNotificationBadge();
     } catch (error) {
       const message =
         error instanceof BriefingServiceError
@@ -66,7 +71,7 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [agencyId, userId]);
+  }, [agencyId, refreshNotificationBadge, userId]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -120,7 +125,24 @@ export default function HomeScreen() {
                 {summary.unacknowledgedCount}
               </AppText>
             </AppCard>
+            <AppCard raised style={styles.statCard}>
+              <AppText variant="caption" color="textSubtle">
+                Unread notifications
+              </AppText>
+              <AppText variant="display" color="primary">
+                {unreadNotificationCount}
+              </AppText>
+              <AppButton
+                label="Open inbox"
+                variant="ghost"
+                onPress={() => router.push(NOTIFICATIONS_HREF)}
+              />
+            </AppCard>
           </View>
+          <AppText variant="caption" color="textSubtle">
+            Direct message unread counts are not shown yet — message read receipts are not
+            tracked. Reading a notification is not the same as reading a conversation.
+          </AppText>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>

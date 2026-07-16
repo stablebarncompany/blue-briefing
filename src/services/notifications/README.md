@@ -1,5 +1,9 @@
 # Notification Services
 
-Push and in-app notification helpers for alerts, acknowledgements, and related messaging.
+In-app notification helpers for agency-scoped alerts (briefings, groups, DMs, membership).
 
-Keep platform-specific notification wiring isolated and typed.
+- List / unread count / mark read / delete
+- Realtime subscription helpers (`subscribeToNotifications`)
+- Creation happens in Postgres triggers/RPCs — clients never insert arbitrary notifications
+
+Native push, email, and SMS are out of scope for this MVP. See `docs/NotificationsMVP.md`.
