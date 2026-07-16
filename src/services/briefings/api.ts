@@ -101,22 +101,35 @@ function sortBriefings(items: BriefingWithMeta[]): BriefingWithMeta[] {
   });
 }
 
+function normalizeFilterToken(value: string | null | undefined): string | 'all' {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed || trimmed.toLowerCase() === 'all') {
+    return 'all';
+  }
+  return trimmed;
+}
+
 function applyClientFilters(items: BriefingWithMeta[], filters: BriefingFilters): BriefingWithMeta[] {
   const search = filters.search?.trim().toLowerCase() ?? '';
+  const priority = normalizeFilterToken(filters.priority);
+  const status = normalizeFilterToken(filters.status);
+  const shift = normalizeFilterToken(filters.shift);
+  const category = normalizeFilterToken(filters.category);
+
   return items.filter((item) => {
-    if (filters.priority && filters.priority !== 'all' && item.priority !== filters.priority) {
+    if (priority !== 'all' && item.priority !== priority) {
       return false;
     }
-    if (filters.status && filters.status !== 'all' && item.status !== filters.status) {
+    if (status !== 'all' && item.status !== status) {
       return false;
     }
-    if (filters.shift && filters.shift !== 'all') {
-      if ((item.shift_name ?? '').toLowerCase() !== filters.shift.toLowerCase()) {
+    if (shift !== 'all') {
+      if ((item.shift_name ?? '').toLowerCase() !== shift.toLowerCase()) {
         return false;
       }
     }
-    if (filters.category && filters.category !== 'all') {
-      if ((item.category ?? '').toLowerCase() !== filters.category.toLowerCase()) {
+    if (category !== 'all') {
+      if ((item.category ?? '').toLowerCase() !== category.toLowerCase()) {
         return false;
       }
     }
@@ -226,7 +239,8 @@ export async function listBriefings(options: {
   filters?: BriefingFilters;
 }): Promise<BriefingWithMeta[]> {
   const agencyId = requireAgencyId(options.agencyId);
-  const statusFilter = options.filters?.status;
+  const filters = options.filters ?? {};
+  const statusFilter = normalizeFilterToken(filters.status);
 
   let query = supabase
     .from('briefings')
@@ -235,18 +249,39 @@ export async function listBriefings(options: {
     .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false });
 
-  if (statusFilter && statusFilter !== 'all') {
+  if (statusFilter !== 'all' && isBriefingStatus(statusFilter)) {
     query = query.eq('status', statusFilter);
   }
 
   const { data, error } = await query;
   if (error) {
+    if (__DEV__) {
+      console.warn('[briefings] listBriefings query failed', {
+        agencyIdPresent: !!agencyId,
+        statusFilter,
+        message: error.message,
+      });
+    }
     throw new BriefingServiceError(error.message || 'Unable to load briefings.');
   }
 
   const briefings = (data ?? []).map((row) => mapBriefing(row as Record<string, unknown>));
   const withMeta = await attachMeta(briefings, options.currentUserId);
-  return sortBriefings(applyClientFilters(withMeta, options.filters ?? {}));
+  const sorted = sortBriefings(applyClientFilters(withMeta, filters));
+
+  if (__DEV__) {
+    console.log('[briefings] listBriefings', {
+      agencyIdPresent: !!agencyId,
+      statusFilter,
+      priority: normalizeFilterToken(filters.priority),
+      pinnedOnly: !!filters.pinnedOnly,
+      acknowledgement: filters.acknowledgement ?? 'all',
+      searchActive: !!(filters.search?.trim()),
+      returnedCount: sorted.length,
+    });
+  }
+
+  return sorted;
 }
 
 export async function getBriefing(options: {

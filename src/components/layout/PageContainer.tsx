@@ -28,8 +28,8 @@ export function PageContainer({
   }
 
   return (
-    <View style={[styles.flex, styles.content, style]}>
-      <View style={[styles.inner, contentStyle]}>{children}</View>
+    <View style={[styles.flex, styles.contentFixed, style]}>
+      <View style={[styles.inner, styles.innerFixed, contentStyle]}>{children}</View>
     </View>
   );
 }
@@ -44,10 +44,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing['2xl'],
     paddingVertical: spacing['3xl'],
   },
+  contentFixed: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing['2xl'],
+    paddingTop: spacing['3xl'],
+    paddingBottom: 0,
+  },
   inner: {
     width: '100%',
     maxWidth: layout.maxContentWidth,
     alignSelf: 'center',
     gap: spacing.lg,
+  },
+  innerFixed: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
   },
 });

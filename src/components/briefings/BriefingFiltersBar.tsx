@@ -11,6 +11,11 @@ import {
   type BriefingStatus,
 } from '@/types/briefings';
 
+function asAllToken(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? '';
+  return !trimmed || trimmed.toLowerCase() === 'all' ? 'all' : trimmed;
+}
+
 type ChipOption<T extends string> = {
   value: T;
   label: string;
@@ -80,10 +85,10 @@ export function BriefingFiltersBar({
   categoryOptions,
   onChange,
 }: BriefingFiltersBarProps) {
-  const priorityValue = (filters.priority ?? 'all') as BriefingPriority | 'all';
-  const statusValue = (filters.status ?? 'all') as BriefingStatus | 'all';
-  const shiftValue = (filters.shift ?? 'all') as string;
-  const categoryValue = (filters.category ?? 'all') as string;
+  const priorityValue = asAllToken(filters.priority) as BriefingPriority | 'all';
+  const statusValue = asAllToken(filters.status) as BriefingStatus | 'all';
+  const shiftValue = asAllToken(filters.shift);
+  const categoryValue = asAllToken(filters.category);
   const ackValue = filters.acknowledgement ?? 'all';
 
   return (

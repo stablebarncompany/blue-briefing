@@ -90,6 +90,29 @@ export type BriefingFilters = {
   acknowledgement?: 'all' | 'acknowledged' | 'unacknowledged';
 };
 
+export const DEFAULT_BRIEFING_FILTERS: BriefingFilters = {
+  search: '',
+  priority: 'all',
+  status: 'all',
+  shift: 'all',
+  category: 'all',
+  pinnedOnly: false,
+  acknowledgement: 'all',
+};
+
+export function hasActiveBriefingFilters(filters: BriefingFilters): boolean {
+  const search = filters.search?.trim() ?? '';
+  return (
+    search.length > 0 ||
+    (!!filters.priority && filters.priority !== 'all') ||
+    (!!filters.status && filters.status !== 'all') ||
+    (!!filters.shift && filters.shift !== 'all') ||
+    (!!filters.category && filters.category !== 'all') ||
+    !!filters.pinnedOnly ||
+    (!!filters.acknowledgement && filters.acknowledgement !== 'all')
+  );
+}
+
 export type BriefingAckWithProfile = BriefingAcknowledgement & {
   profile: BriefingAuthor | null;
 };

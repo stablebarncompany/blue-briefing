@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,7 +6,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import {
   BriefingCard,
@@ -26,148 +26,166 @@ import {
   BriefingServiceError,
   listBriefings,
 } from '@/services/briefings';
-import { colors, spacing } from '@/theme';
-import type { BriefingFilters, BriefingWithMeta } from '@/types/briefings';
-
-const DEFAULT_FILTERS: BriefingFilters = {
-  search: '',
-  priority: 'all',
-  status: 'active',
-  shift: 'all',
-  category: 'all',
-  pinnedOnly: false,
-  acknowledgement: 'all',
-};
-
-function matchesFilters(item: BriefingWithMeta, filters: BriefingFilters): boolean {
-  const search = filters.search?.trim().toLowerCase() ?? '';
-  if (filters.priority && filters.priority !== 'all' && item.priority !== filters.priority) {
-    return false;
-  }
-  if (filters.shift && filters.shift !== 'all') {
-    if ((item.shift_name ?? '').toLowerCase() !== filters.shift.toLowerCase()) {
-      return false;
-    }
-  }
-  if (filters.category && filters.category !== 'all') {
-    if ((item.category ?? '').toLowerCase() !== filters.category.toLowerCase()) {
-      return false;
-    }
-  }
-  if (filters.pinnedOnly && !item.is_pinned) {
-    return false;
-  }
-  if (filters.acknowledgement === 'acknowledged' && !item.acknowledged_by_me) {
-    return false;
-  }
-  if (filters.acknowledgement === 'unacknowledged') {
-    if (!item.requires_acknowledgement || item.acknowledged_by_me || item.status !== 'active') {
-      return false;
-    }
-  }
-  if (search) {
-    const haystack = [
-      item.title,
-      item.body,
-      item.shift_name,
-      item.category,
-      item.case_number,
-      item.location,
-      ...item.tags,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    if (!haystack.includes(search)) {
-      return false;
-    }
-  }
-  return true;
-}
+import { colors, layout, spacing } from '@/theme';
+import {
+  DEFAULT_BRIEFING_FILTERS,
+  hasActiveBriefingFilters,
+  type BriefingFilters,
+  type BriefingWithMeta,
+} from '@/types/briefings';
 
 export default function BriefingsListScreen() {
   const { user } = useAuth();
-  const { currentAgency } = useAgency();
+  const { currentAgency, isLoading: agencyLoading } = useAgency();
   const agencyId = currentAgency?.id ?? null;
   const userId = user?.id ?? null;
 
-  const [filters, setFilters] = useState<BriefingFilters>(DEFAULT_FILTERS);
-  const statusFilter = filters.status ?? 'active';
-  const [sourceItems, setSourceItems] = useState<BriefingWithMeta[]>([]);
+  const [filters, setFilters] = useState<BriefingFilters>(DEFAULT_BRIEFING_FILTERS);
+  const [items, setItems] = useState<BriefingWithMeta[]>([]);
+  const [optionSource, setOptionSource] = useState<BriefingWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
+
+  const filtersActive = hasActiveBriefingFilters(filters);
 
   const load = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
+      if (agencyLoading) {
+        return;
+      }
+
       if (!agencyId || !userId) {
-        setSourceItems([]);
+        setItems([]);
+        setOptionSource([]);
         setIsLoading(false);
+        setHasLoadedOnce(true);
+        hasLoadedOnceRef.current = true;
+        if (__DEV__) {
+          console.log('[briefings] skip list load — agency or user unavailable', {
+            agencyIdPresent: !!agencyId,
+            userIdPresent: !!userId,
+          });
+        }
         return;
       }
 
       if (mode === 'refresh') {
         setIsRefreshing(true);
-      } else {
+      } else if (!hasLoadedOnceRef.current) {
         setIsLoading(true);
       }
       setErrorMessage(null);
 
+      if (__DEV__) {
+        console.log('[briefings] loading list', {
+          agencyIdPresent: true,
+          filters: {
+            search: filters.search?.trim() ? '[set]' : '',
+            priority: filters.priority ?? 'all',
+            status: filters.status ?? 'all',
+            shift: filters.shift ?? 'all',
+            category: filters.category ?? 'all',
+            pinnedOnly: !!filters.pinnedOnly,
+            acknowledgement: filters.acknowledgement ?? 'all',
+          },
+        });
+      }
+
       try {
-        const rows = await listBriefings({
+        const filteredRows = await listBriefings({
           agencyId,
           currentUserId: userId,
-          filters: { status: statusFilter },
+          filters,
         });
-        setSourceItems(rows);
+        setItems(filteredRows);
+
+        if (hasActiveBriefingFilters(filters)) {
+          const allRows = await listBriefings({
+            agencyId,
+            currentUserId: userId,
+            filters: DEFAULT_BRIEFING_FILTERS,
+          });
+          setOptionSource(allRows);
+        } else {
+          setOptionSource(filteredRows);
+        }
       } catch (error) {
         const message =
           error instanceof BriefingServiceError
             ? error.message
             : 'Unable to load briefings.';
+        if (__DEV__) {
+          console.warn('[briefings] list load failed', { message });
+        }
         setErrorMessage(message);
+        if (!hasLoadedOnceRef.current) {
+          setItems([]);
+        }
       } finally {
+        hasLoadedOnceRef.current = true;
+        setHasLoadedOnce(true);
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [agencyId, statusFilter, userId],
+    [agencyId, agencyLoading, filters, userId],
   );
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      void load('initial');
-    });
-  }, [load]);
-
-  const items = useMemo(
-    () => sourceItems.filter((item) => matchesFilters(item, filters)),
-    [filters, sourceItems],
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          void load(hasLoadedOnceRef.current ? 'refresh' : 'initial');
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [load]),
   );
 
   const shiftOptions = useMemo(() => {
     const values = new Set<string>();
-    for (const item of sourceItems) {
+    for (const item of optionSource) {
       if (item.shift_name?.trim()) {
         values.add(item.shift_name.trim());
       }
     }
     return [...values].sort((a, b) => a.localeCompare(b));
-  }, [sourceItems]);
+  }, [optionSource]);
 
   const categoryOptions = useMemo(() => {
     const values = new Set<string>();
-    for (const item of sourceItems) {
+    for (const item of optionSource) {
       if (item.category?.trim()) {
         values.add(item.category.trim());
       }
     }
     return [...values].sort((a, b) => a.localeCompare(b));
-  }, [sourceItems]);
+  }, [optionSource]);
+
+  const showAgencyLoading = agencyLoading || (!currentAgency && !hasLoadedOnce && !errorMessage);
+
+  if (showAgencyLoading) {
+    return (
+      <PageContainer scroll={false} contentStyle={styles.page}>
+        <View style={styles.centered}>
+          <ActivityIndicator color={colors.primary} />
+          <AppText variant="caption" color="textMuted">
+            Loading agency context…
+          </AppText>
+        </View>
+      </PageContainer>
+    );
+  }
 
   if (!currentAgency) {
     return (
-      <PageContainer>
+      <PageContainer scroll={false} contentStyle={styles.page}>
         <EmptyState
           title="Select an agency"
           description="Choose an agency membership before viewing briefings."
@@ -176,21 +194,20 @@ export default function BriefingsListScreen() {
     );
   }
 
-  return (
-    <PageContainer scroll={false} contentStyle={styles.page}>
-      <View style={styles.header}>
-        <View style={styles.headingBlock}>
-          <AppText variant="display">Briefings</AppText>
-          <AppText variant="body" color="textMuted">
-            Searchable, acknowledged pass-ons for every watch.
-          </AppText>
-        </View>
-        <AppButton
-          label="New briefing"
-          onPress={() => router.push(BRIEFINGS_CREATE_HREF)}
-          style={styles.newButton}
-        />
+  const listHeader = (
+    <View style={styles.header}>
+      <View style={styles.headingBlock}>
+        <AppText variant="display">Briefings</AppText>
+        <AppText variant="body" color="textMuted">
+          Searchable, acknowledged pass-ons for every watch.
+        </AppText>
       </View>
+
+      <AppButton
+        label="New briefing"
+        onPress={() => router.push(BRIEFINGS_CREATE_HREF)}
+        style={styles.newButton}
+      />
 
       <BriefingFiltersBar
         filters={filters}
@@ -199,41 +216,66 @@ export default function BriefingsListScreen() {
         onChange={setFilters}
       />
 
+      {filtersActive ? (
+        <AppButton
+          label="Clear filters"
+          variant="ghost"
+          onPress={() => setFilters(DEFAULT_BRIEFING_FILTERS)}
+          style={styles.clearButton}
+        />
+      ) : null}
+
+      {__DEV__ && hasLoadedOnce && !errorMessage ? (
+        <AppText variant="caption" color="textSubtle">
+          {items.length} briefing{items.length === 1 ? '' : 's'}
+        </AppText>
+      ) : null}
+
       {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
 
-      {isLoading ? (
-        <View style={styles.centered}>
+      {isLoading && !isRefreshing ? (
+        <View style={styles.inlineLoading}>
           <ActivityIndicator color={colors.primary} />
           <AppText variant="caption" color="textMuted">
             Loading briefings…
           </AppText>
         </View>
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => void load('refresh')}
-              tintColor={colors.primary}
-            />
-          }
-          ListEmptyComponent={
+      ) : null}
+    </View>
+  );
+
+  return (
+    <PageContainer scroll={false} contentStyle={styles.page}>
+      <FlatList
+        style={styles.list}
+        data={items}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void load('refresh')}
+            tintColor={colors.primary}
+          />
+        }
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={
+          isLoading || errorMessage ? null : (
             <EmptyState
-              title="No briefings match"
+              title="No briefings yet"
               description="Create a pass-on or adjust filters to see agency briefings."
             />
-          }
-          renderItem={({ item }) => (
+          )
+        }
+        renderItem={({ item }) => (
+          <View style={styles.cardWrap}>
             <BriefingCard
               briefing={item}
               onPress={() => router.push(briefingDetailHref(item.id))}
             />
-          )}
-        />
-      )}
+          </View>
+        )}
+      />
     </PageContainer>
   );
 }
@@ -241,10 +283,20 @@ export default function BriefingsListScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    gap: spacing.lg,
+    minHeight: 0,
+    gap: 0,
+  },
+  list: {
+    flex: 1,
+    minHeight: 0,
+  },
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: layout.bottomNavHeight + spacing['3xl'],
   },
   header: {
     gap: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   headingBlock: {
     gap: spacing.sm,
@@ -252,10 +304,11 @@ const styles = StyleSheet.create({
   newButton: {
     alignSelf: 'flex-start',
   },
-  listContent: {
-    gap: spacing.md,
-    paddingBottom: spacing['4xl'],
-    flexGrow: 1,
+  clearButton: {
+    alignSelf: 'flex-start',
+  },
+  cardWrap: {
+    marginBottom: spacing.md,
   },
   centered: {
     flex: 1,
@@ -263,5 +316,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
     paddingVertical: spacing['4xl'],
+  },
+  inlineLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xl,
   },
 });
