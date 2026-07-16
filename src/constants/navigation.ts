@@ -1,9 +1,10 @@
 import type { Href } from 'expo-router';
 
 export type NavItem = {
-  name: 'home' | 'briefings' | 'groups' | 'messages' | 'more';
+  name: 'home' | 'briefings' | 'groups' | 'messages' | 'personnel';
   href: Href;
   label: string;
+  icon?: 'home' | 'briefings' | 'groups' | 'messages' | 'personnel';
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
@@ -11,26 +12,31 @@ export const NAV_ITEMS: readonly NavItem[] = [
     name: 'home',
     href: '/' as Href,
     label: 'Home',
+    icon: 'home',
   },
   {
     name: 'briefings',
     href: '/briefings' as Href,
     label: 'Briefings',
+    icon: 'briefings',
   },
   {
     name: 'groups',
     href: '/groups' as Href,
     label: 'Groups',
+    icon: 'groups',
   },
   {
     name: 'messages',
     href: '/messages' as Href,
     label: 'Messages',
+    icon: 'messages',
   },
   {
-    name: 'more',
-    href: '/more' as Href,
-    label: 'More',
+    name: 'personnel',
+    href: '/personnel' as Href,
+    label: 'Personnel',
+    icon: 'personnel',
   },
 ];
 
@@ -42,6 +48,15 @@ export const GROUPS_HREF = '/groups' as Href;
 export const GROUPS_CREATE_HREF = '/groups/create' as Href;
 export const MESSAGES_HREF = '/messages' as Href;
 export const MESSAGES_NEW_HREF = '/messages/new' as Href;
+export const MORE_HREF = '/more' as Href;
+export const PERSONNEL_HREF = '/personnel' as Href;
+export const PERSONNEL_INVITE_HREF = '/personnel/invite' as Href;
+export const ACCEPT_INVITE_HREF = '/accept-invite' as Href;
+export const SIGN_IN_HREF = '/sign-in' as Href;
+export const SIGN_UP_HREF = '/sign-up' as Href;
+export const WELCOME_HREF = '/welcome' as Href;
+export const PENDING_ACCESS_HREF = '/pending-access' as Href;
+export const SELECT_AGENCY_HREF = '/select-agency' as Href;
 
 export function briefingDetailHref(id: string): Href {
   return `/briefings/${id}` as Href;
@@ -53,4 +68,8 @@ export function groupDetailHref(id: string): Href {
 
 export function conversationDetailHref(id: string): Href {
   return `/messages/${id}` as Href;
+}
+
+export function personnelMemberHref(id: string): Href {
+  return `/personnel/${id}` as Href;
 }

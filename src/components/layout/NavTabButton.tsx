@@ -1,3 +1,4 @@
+import { SymbolView } from 'expo-symbols';
 import { type TabTriggerSlotProps } from 'expo-router/ui';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -10,6 +11,14 @@ export type NavTabButtonProps = TabTriggerSlotProps & {
   compact?: boolean;
 };
 
+const NAV_ICONS = {
+  home: { ios: 'house.fill', android: 'home', web: 'home' },
+  briefings: { ios: 'doc.text.fill', android: 'description', web: 'description' },
+  groups: { ios: 'person.3.fill', android: 'groups', web: 'groups' },
+  messages: { ios: 'bubble.left.and.bubble.right.fill', android: 'chat', web: 'chat' },
+  personnel: { ios: 'person.2.fill', android: 'group', web: 'group' },
+} as const;
+
 export function NavTabButton({
   item,
   isFocused,
@@ -17,6 +26,9 @@ export function NavTabButton({
   style,
   ...props
 }: NavTabButtonProps) {
+  const icon = item.icon ? NAV_ICONS[item.icon] : null;
+  const tint = isFocused ? colors.text : colors.textMuted;
+
   return (
     <Pressable
       {...props}
@@ -29,7 +41,11 @@ export function NavTabButton({
         state.pressed && styles.pressed,
         typeof style === 'function' ? style(state) : style,
       ]}>
-      <View style={[styles.indicator, isFocused && styles.indicatorFocused]} />
+      {icon ? (
+        <SymbolView name={icon as never} size={compact ? 18 : 20} tintColor={tint} />
+      ) : (
+        <View style={[styles.indicator, isFocused && styles.indicatorFocused]} />
+      )}
       <AppText variant={compact ? 'caption' : 'label'} color={isFocused ? 'text' : 'textMuted'}>
         {item.label}
       </AppText>

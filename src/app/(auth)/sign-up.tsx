@@ -10,8 +10,9 @@ import {
   InlineFormMessage,
   PasswordField,
 } from '@/components/common';
-import { APP_HOME_HREF } from '@/constants/navigation';
+import { ACCEPT_INVITE_HREF, APP_HOME_HREF } from '@/constants/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useHasPendingInviteToken } from '@/hooks/use-pending-invite-token';
 import {
   validateEmailField,
   validatePasswordConfirmation,
@@ -22,6 +23,7 @@ import { spacing } from '@/theme';
 
 export default function SignUpScreen() {
   const { signUp } = useAuth();
+  const hasInviteToken = useHasPendingInviteToken();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -68,8 +70,15 @@ export default function SignUpScreen() {
 
       if (result.requiresEmailConfirmation) {
         setInfoMessage(
-          'Account created. Check your email to confirm your address before signing in.',
+          hasInviteToken
+            ? 'Account created. Confirm your email, then sign in to accept the invitation.'
+            : 'Account created. Check your email to confirm your address before signing in.',
         );
+        return;
+      }
+
+      if (hasInviteToken) {
+        router.replace(ACCEPT_INVITE_HREF);
         return;
       }
 
@@ -83,6 +92,12 @@ export default function SignUpScreen() {
     <AuthScreenLayout
       title="Create account"
       subtitle="An account does not yet grant agency access. Invitations and membership come next.">
+      {hasInviteToken ? (
+        <InlineFormMessage
+          tone="info"
+          message="You’re signing in to accept an agency invitation."
+        />
+      ) : null}
       {formError ? <InlineFormMessage message={formError} /> : null}
       {infoMessage ? <InlineFormMessage message={infoMessage} tone="success" /> : null}
 

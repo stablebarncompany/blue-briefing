@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -7,6 +8,7 @@ import {
   AuthScreenLayout,
   InlineFormMessage,
 } from '@/components/common';
+import { ACCEPT_INVITE_HREF } from '@/constants/navigation';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
 import { spacing } from '@/theme';
@@ -74,6 +76,11 @@ export default function PendingAccessScreen() {
       {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
 
       <View style={styles.actions}>
+        <AppButton
+          label="Accept invitation"
+          onPress={() => router.push(ACCEPT_INVITE_HREF)}
+          disabled={refreshing || signingOut}
+        />
         <AppButton
           label="Refresh membership"
           variant="secondary"

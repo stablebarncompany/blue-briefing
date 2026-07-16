@@ -48,6 +48,7 @@ import {
   type GroupPostWithMeta,
   type GroupWithMeta,
 } from '@/types/groups';
+import { formatPersonnelRole } from '@/types/personnel';
 
 export type GroupDetailPanelProps = {
   agencyId: string;
@@ -337,6 +338,11 @@ export function GroupDetailPanel({
                         style={[styles.chip, selected ? styles.chipSelected : null]}>
                         <AppText variant="caption" color={selected ? 'text' : 'textMuted'}>
                           {label}
+                        </AppText>
+                        <AppText variant="caption" color="textSubtle">
+                          Role: {formatPersonnelRole(person.role)}
+                          {person.title ? ` · Title: ${person.title}` : ''}
+                          {person.unit ? ` · Unit: ${person.unit}` : ''}
                         </AppText>
                       </Pressable>
                     );

@@ -10,13 +10,15 @@ import {
   InlineFormMessage,
   PasswordField,
 } from '@/components/common';
-import { APP_HOME_HREF } from '@/constants/navigation';
+import { ACCEPT_INVITE_HREF, APP_HOME_HREF } from '@/constants/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useHasPendingInviteToken } from '@/hooks/use-pending-invite-token';
 import { validateEmailField, validatePasswordField } from '@/services/auth';
 import { spacing } from '@/theme';
 
 export default function SignInScreen() {
   const { signIn } = useAuth();
+  const hasInviteToken = useHasPendingInviteToken();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -46,7 +48,12 @@ export default function SignInScreen() {
         setFormError(result.errorMessage);
         return;
       }
-      // Route guards send the user to pending-access, select-agency, or the app shell.
+
+      if (hasInviteToken) {
+        router.replace(ACCEPT_INVITE_HREF);
+        return;
+      }
+
       router.replace(APP_HOME_HREF);
     } finally {
       setSubmitting(false);
@@ -55,6 +62,12 @@ export default function SignInScreen() {
 
   return (
     <AuthScreenLayout title="Sign in" subtitle="Use your agency email to continue.">
+      {hasInviteToken ? (
+        <InlineFormMessage
+          tone="info"
+          message="You’re signing in to accept an agency invitation."
+        />
+      ) : null}
       {formError ? <InlineFormMessage message={formError} /> : null}
 
       <FormField

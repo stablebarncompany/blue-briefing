@@ -7,6 +7,7 @@ import { StyleSheet, View } from 'react-native';
 import { BrandedLoadingScreen } from '@/components/common';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
+import { useHasPendingInviteToken } from '@/hooks/use-pending-invite-token';
 import { AgencyProvider } from '@/services/agency';
 import { AuthProvider } from '@/services/auth';
 import { colors } from '@/theme';
@@ -45,6 +46,7 @@ function RootNavigator() {
     activeMemberships,
     currentMembership,
   } = useAgency();
+  const hasInviteToken = useHasPendingInviteToken();
 
   if (authLoading || (session && agencyLoading)) {
     return <BrandedLoadingScreen />;
@@ -57,21 +59,33 @@ function RootNavigator() {
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: styles.stackContent }}>
-      <Stack.Protected guard={hasSession && canEnterApp}>
+      {/*
+        Screen order matters for Expo Router Protected fallbacks.
+
+        - Signed-out auth routes stay available even when an invite token is pending,
+          so Sign In / Create Account are reachable from /accept-invite.
+        - While signed in with a pending invite token, app destinations stay gated so
+          auth completion falls back to /accept-invite (registered last).
+      */}
+
+      <Stack.Protected guard={hasSession && canEnterApp && !hasInviteToken}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
 
-      <Stack.Protected guard={hasSession && needsAgencySelection}>
+      <Stack.Protected guard={hasSession && needsAgencySelection && !hasInviteToken}>
         <Stack.Screen name="select-agency" />
       </Stack.Protected>
 
-      <Stack.Protected guard={hasSession && !hasActiveMembership}>
+      <Stack.Protected guard={hasSession && !hasActiveMembership && !hasInviteToken}>
         <Stack.Screen name="pending-access" />
       </Stack.Protected>
 
+      {/* Auth must remain reachable while signed out with a pending invite token. */}
       <Stack.Protected guard={!hasSession}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
+
+      <Stack.Screen name="accept-invite" />
     </Stack>
   );
 }

@@ -51,6 +51,7 @@ export function AgencyProvider({ children }: PropsWithChildren) {
   const [memberships, setMemberships] = useState<AgencyMemberWithAgency[]>([]);
   const [currentMembership, setCurrentMembership] = useState<AgencyMemberWithAgency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasResolvedMemberships, setHasResolvedMemberships] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const signedInUserId = session && user ? user.id : null;
@@ -93,17 +94,31 @@ export function AgencyProvider({ children }: PropsWithChildren) {
       setError('Unable to load agency membership. Please try again.');
     } finally {
       setIsLoading(false);
+      setHasResolvedMemberships(true);
     }
   }, [user]);
 
   useEffect(() => {
-    if (authLoading || !signedInUserId) {
+    if (authLoading) {
+      return;
+    }
+
+    if (!signedInUserId) {
+      queueMicrotask(() => {
+        setProfile(null);
+        setMemberships([]);
+        setCurrentMembership(null);
+        setError(null);
+        setIsLoading(false);
+        setHasResolvedMemberships(false);
+      });
       return;
     }
 
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) {
+        setHasResolvedMemberships(false);
         void loadAgencyContext();
       }
     });
@@ -145,7 +160,8 @@ export function AgencyProvider({ children }: PropsWithChildren) {
       activeMemberships: scopedActive,
       currentMembership: scopedCurrent,
       currentAgency: scopedCurrent?.agency ?? null,
-      isLoading: authLoading || (!!signedInUserId && isLoading),
+      // Block route decisions until the first membership load finishes for this session.
+      isLoading: authLoading || (!!signedInUserId && (!hasResolvedMemberships || isLoading)),
       error: signedInUserId ? error : null,
       refreshAgencyContext: loadAgencyContext,
       selectAgency,
@@ -156,6 +172,7 @@ export function AgencyProvider({ children }: PropsWithChildren) {
     currentMembership,
     profile,
     authLoading,
+    hasResolvedMemberships,
     isLoading,
     error,
     loadAgencyContext,

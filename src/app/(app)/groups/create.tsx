@@ -26,6 +26,7 @@ import {
   canCreateGroups,
   formatGroupAuthorName,
 } from '@/types/groups';
+import { formatPersonnelRole } from '@/types/personnel';
 
 export default function CreateGroupScreen() {
   const { user } = useAuth();
@@ -230,7 +231,9 @@ export default function CreateGroupScreen() {
                 style={[styles.personMain, selected ? styles.personSelected : null]}>
                 <AppText variant="body">{formatGroupAuthorName(person.profile)}</AppText>
                 <AppText variant="caption" color="textSubtle">
-                  {person.unit || person.title || person.role}
+                  Role: {formatPersonnelRole(person.role)}
+                  {person.title ? ` · Title: ${person.title}` : ''}
+                  {person.unit ? ` · Unit: ${person.unit}` : ''}
                 </AppText>
               </Pressable>
               <Pressable

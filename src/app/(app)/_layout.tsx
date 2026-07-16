@@ -2,7 +2,7 @@ import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
 import { StyleSheet } from 'react-native';
 
 import { AppShell } from '@/components/layout';
-import { NAV_ITEMS } from '@/constants/navigation';
+import { MORE_HREF, NAV_ITEMS } from '@/constants/navigation';
 import { colors } from '@/theme';
 
 export default function AppLayout() {
@@ -15,6 +15,8 @@ export default function AppLayout() {
         {NAV_ITEMS.map((item) => (
           <TabTrigger key={item.name} name={item.name} href={item.href} />
         ))}
+        {/* Legacy /more path remains reachable and redirects into Personnel. */}
+        <TabTrigger name="more" href={MORE_HREF} />
       </TabList>
     </Tabs>
   );
