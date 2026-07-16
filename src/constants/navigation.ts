@@ -38,7 +38,13 @@ export const PRODUCT_NAME = 'Blue Briefing';
 export const APP_HOME_HREF = '/' as Href;
 export const BRIEFINGS_HREF = '/briefings' as Href;
 export const BRIEFINGS_CREATE_HREF = '/briefings/create' as Href;
+export const GROUPS_HREF = '/groups' as Href;
+export const GROUPS_CREATE_HREF = '/groups/create' as Href;
 
 export function briefingDetailHref(id: string): Href {
   return `/briefings/${id}` as Href;
+}
+
+export function groupDetailHref(id: string): Href {
+  return `/groups/${id}` as Href;
 }

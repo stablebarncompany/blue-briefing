@@ -104,3 +104,77 @@ export async function fetchMembershipsForUser(userId: string): Promise<AgencyMem
   const rows = (data ?? []) as MembershipRow[];
   return rows.map(mapMembership).filter((row): row is AgencyMemberWithAgency => row !== null);
 }
+
+export type AgencyPersonnel = {
+  user_id: string;
+  role: AgencyRole;
+  badge_number: string | null;
+  unit: string | null;
+  title: string | null;
+  profile: Profile | null;
+};
+
+/** Active personnel in the selected agency (for invite pickers). */
+export async function listActiveAgencyPersonnel(agencyId: string): Promise<AgencyPersonnel[]> {
+  if (!agencyId) {
+    throw new Error('No agency is selected.');
+  }
+
+  const { data, error } = await supabase
+    .from('agency_members')
+    .select(
+      `
+      user_id,
+      role,
+      badge_number,
+      unit,
+      title,
+      status
+    `,
+    )
+    .eq('agency_id', agencyId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const members = (data ?? []).filter(
+    (row): row is {
+      user_id: string;
+      role: string;
+      badge_number: string | null;
+      unit: string | null;
+      title: string | null;
+      status: string;
+    } => isAgencyRole(String(row.role)),
+  );
+
+  const userIds = members.map((row) => row.user_id);
+  const profiles = new Map<string, Profile>();
+  if (userIds.length > 0) {
+    const { data: profileRows, error: profileError } = await supabase
+      .from('profiles')
+      .select(
+        'id, first_name, last_name, display_name, email, phone, avatar_path, created_at, updated_at',
+      )
+      .in('id', userIds);
+
+    if (profileError) {
+      throw profileError;
+    }
+    for (const profile of (profileRows ?? []) as Profile[]) {
+      profiles.set(profile.id, profile);
+    }
+  }
+
+  return members.map((row) => ({
+    user_id: row.user_id,
+    role: row.role as AgencyRole,
+    badge_number: row.badge_number,
+    unit: row.unit,
+    title: row.title,
+    profile: profiles.get(row.user_id) ?? null,
+  }));
+}
