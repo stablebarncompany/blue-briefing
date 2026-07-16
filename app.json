@@ -17,7 +17,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -39,11 +42,27 @@
         {
           "photosPermission": "Allow Blue Briefing to attach photos to operational briefings."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#2F6FED",
+          "defaultChannel": "blue-briefing-alerts",
+          "enableBackgroundRemoteNotifications": true
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "df9a3d9c-2a45-4fd0-b231-4b950e93c7e7"
+      },
+      "router": {}
+    },
+    "owner": "blue-briefing"
   }
 }

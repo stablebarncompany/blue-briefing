@@ -1,6 +1,6 @@
 # Notifications MVP
 
-Agency-scoped in-app notifications with truthful unread counts. Native push, email, SMS, AI, and scheduling are out of scope.
+Agency-scoped in-app notifications with truthful unread counts. Native push foundation is documented in `docs/PushNotificationsMVP.md` (device registration + Edge Function; not auto-deployed).
 
 Migration (do not apply from the app):
 

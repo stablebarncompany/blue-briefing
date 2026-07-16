@@ -8,9 +8,11 @@ import {
   InlineFormMessage,
   SectionLabel,
 } from '@/components/common';
+import { NotificationPreferencesPanel } from '@/components/personnel/NotificationPreferencesPanel';
 import { ACCEPT_INVITE_HREF } from '@/constants/navigation';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
+import { unregisterPushDevice } from '@/services/push-notifications';
 import { spacing } from '@/theme';
 import { formatAgencyRole } from '@/types/agency';
 
@@ -35,6 +37,11 @@ export function AccountPanel() {
     setSigningOut(true);
     setErrorMessage(null);
     try {
+      try {
+        await unregisterPushDevice();
+      } catch {
+        // Sign-out should continue even if device deactivation fails.
+      }
       const result = await signOut();
       if (result.errorMessage) {
         setErrorMessage(result.errorMessage);
@@ -116,6 +123,8 @@ export function AccountPanel() {
           ))}
         </View>
       ) : null}
+
+      <NotificationPreferencesPanel />
 
       <AppButton
         label="Accept invitation"

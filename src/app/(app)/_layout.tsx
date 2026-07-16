@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import { AppShell } from '@/components/layout';
 import { NotificationRealtimeHost } from '@/components/notifications/NotificationRealtimeHost';
+import { PushNotificationBootstrap } from '@/components/notifications/PushNotificationBootstrap';
 import { MORE_HREF, NAV_ITEMS, NOTIFICATIONS_HREF } from '@/constants/navigation';
 import { colors } from '@/theme';
 
@@ -10,6 +11,7 @@ export default function AppLayout() {
   return (
     <Tabs>
       <NotificationRealtimeHost />
+      <PushNotificationBootstrap />
       <AppShell>
         <TabSlot style={styles.slot} />
       </AppShell>

@@ -9,6 +9,7 @@ export {
 } from './InviteMemberForm';
 export { InviteSuccessPanel } from './InviteSuccessPanel';
 export { AccountPanel } from './AccountPanel';
+export { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
 export { canPrintRoster, printPersonnelRoster } from './printRoster';
 export { RoleSelect } from './RoleSelect';
 export { UnitSelect, resolveUnitSelection, splitUnitSelection } from './UnitSelect';
