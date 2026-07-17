@@ -68,37 +68,40 @@ export function GroupPostCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.metaRow}>
-        {post.is_pinned ? (
-          <AppText variant="caption" color="warning">
-            Pinned
+      <View style={styles.authorRow}>
+        <PersonnelIdentity
+          agencyId={post.agency_id}
+          userId={post.author?.id}
+          displayName={post.author?.display_name}
+          preferredName={post.author?.preferred_name}
+          firstName={post.author?.first_name}
+          lastName={post.author?.last_name}
+          avatarPath={post.author?.avatar_path}
+          rank={post.author?.rank}
+          title={post.author?.title}
+          unit={post.author?.unit}
+          role={post.author?.role}
+          size="sm"
+          showMeta
+        />
+        <View style={styles.metaAside}>
+          {post.is_pinned ? (
+            <AppText variant="caption" color="warning">
+              Pinned
+            </AppText>
+          ) : null}
+          <AppText variant="caption" color="textSubtle">
+            {formatGroupDateTime(post.created_at)}
           </AppText>
-        ) : null}
-        <AppText variant="caption" color="textSubtle" style={styles.date}>
-          {formatGroupDateTime(post.created_at)}
-        </AppText>
+        </View>
       </View>
-      <PersonnelIdentity
-        agencyId={post.agency_id}
-        userId={post.author?.id}
-        displayName={post.author?.display_name}
-        preferredName={post.author?.preferred_name}
-        firstName={post.author?.first_name}
-        lastName={post.author?.last_name}
-        avatarPath={post.author?.avatar_path}
-        rank={post.author?.rank}
-        title={post.author?.title}
-        unit={post.author?.unit}
-        role={post.author?.role}
-        size="sm"
-        showMeta
-      />
+
       <AppText variant="body">{post.body}</AppText>
 
-      <View style={styles.actions}>
+      <View style={styles.footer}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={expanded ? 'Hide replies' : 'Show replies'}
+          accessibilityLabel={expanded ? 'Hide replies' : 'View replies'}
           onPress={() => {
             const next = !expanded;
             setExpanded(next);
@@ -108,7 +111,7 @@ export function GroupPostCard({
           }}>
           <AppText variant="caption" color="primary">
             {post.reply_count} repl{post.reply_count === 1 ? 'y' : 'ies'}
-            {expanded ? ' · Hide' : ' · View'}
+            {expanded ? ' · Hide' : ' · View replies'}
           </AppText>
         </Pressable>
         {canPin && onPin ? (
@@ -144,24 +147,26 @@ export function GroupPostCard({
           ) : null}
           {replies.map((reply) => (
             <View key={reply.id} style={styles.reply}>
-              <PersonnelIdentity
-                agencyId={reply.agency_id}
-                userId={reply.author?.id}
-                displayName={reply.author?.display_name}
-                preferredName={reply.author?.preferred_name}
-                firstName={reply.author?.first_name}
-                lastName={reply.author?.last_name}
-                avatarPath={reply.author?.avatar_path}
-                rank={reply.author?.rank}
-                title={reply.author?.title}
-                unit={reply.author?.unit}
-                role={reply.author?.role}
-                size="sm"
-                showMeta
-              />
-              <AppText variant="caption" color="textSubtle">
-                {formatGroupDateTime(reply.created_at)}
-              </AppText>
+              <View style={styles.authorRow}>
+                <PersonnelIdentity
+                  agencyId={reply.agency_id}
+                  userId={reply.author?.id}
+                  displayName={reply.author?.display_name}
+                  preferredName={reply.author?.preferred_name}
+                  firstName={reply.author?.first_name}
+                  lastName={reply.author?.last_name}
+                  avatarPath={reply.author?.avatar_path}
+                  rank={reply.author?.rank}
+                  title={reply.author?.title}
+                  unit={reply.author?.unit}
+                  role={reply.author?.role}
+                  size="sm"
+                  showMeta
+                />
+                <AppText variant="caption" color="textSubtle">
+                  {formatGroupDateTime(reply.created_at)}
+                </AppText>
+              </View>
               <AppText variant="body">{reply.body}</AppText>
               {canDeleteReply?.(reply) && onDeleteReply ? (
                 <Pressable
@@ -206,32 +211,35 @@ export function GroupPostCard({
 
 const styles = StyleSheet.create({
   card: {
-    gap: spacing.sm,
+    gap: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.lg,
     backgroundColor: colors.surface,
   },
-  metaRow: {
+  authorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  date: {
-    marginLeft: 'auto',
+  metaAside: {
+    alignItems: 'flex-end',
+    gap: spacing.xxs,
   },
-  actions: {
+  footer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.lg,
-    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   replies: {
     gap: spacing.md,
-    marginTop: spacing.sm,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
   reply: {
@@ -241,7 +249,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.border,
   },
   replyInput: {
-    minHeight: 88,
+    minHeight: 72,
     paddingTop: spacing.md,
   },
   replyButton: {

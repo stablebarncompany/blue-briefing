@@ -4,6 +4,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   View,
 } from 'react-native';
@@ -35,6 +36,7 @@ import type { AgencyRole } from '@/types/agency';
 import { isAgencyRole } from '@/types/agency';
 import {
   canEditDirectMessage,
+  formatMessageAuthorName,
   formatMessageDateTime,
   type ConversationSummary,
   type DirectMessageWithMeta,
@@ -51,6 +53,8 @@ export type ConversationThreadProps = {
   conversationId: string;
   currentUserId: string;
   onMembershipChanged?: () => void;
+  /** When false, omit bottom-nav padding (desktop split pane). */
+  includeBottomNavInset?: boolean;
 };
 
 export function ConversationThread({
@@ -58,6 +62,7 @@ export function ConversationThread({
   conversationId,
   currentUserId,
   onMembershipChanged,
+  includeBottomNavInset = true,
 }: ConversationThreadProps) {
   const listRef = useRef<FlatList<DirectMessageWithMeta>>(null);
   const [summary, setSummary] = useState<ConversationSummary | null>(null);
@@ -167,12 +172,15 @@ export function ConversationThread({
           ...current,
           {
             ...created,
-            sender: summary?.otherMember.id === created.sender_id ? summary.otherMember : {
-              id: currentUserId,
-              display_name: null,
-              first_name: null,
-              last_name: null,
-            },
+            sender:
+              summary?.otherMember.id === created.sender_id
+                ? summary.otherMember
+                : {
+                    id: currentUserId,
+                    display_name: null,
+                    first_name: null,
+                    last_name: null,
+                  },
           },
         ];
       });
@@ -187,10 +195,7 @@ export function ConversationThread({
     }
   }
 
-  async function runPref(
-    key: string,
-    action: () => Promise<unknown>,
-  ) {
+  async function runPref(key: string, action: () => Promise<unknown>) {
     if (busyAction) {
       return;
     }
@@ -300,10 +305,11 @@ export function ConversationThread({
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
             title="No messages yet"
-            description="Send the first secure agency direct message."
+            description={`Send the first message to ${formatMessageAuthorName(summary.otherMember)}.`}
           />
         }
         renderItem={({ item }) => {
@@ -319,24 +325,6 @@ export function ConversationThread({
           return (
             <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
               <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                {!mine ? (
-                  <View style={styles.senderIdentity}>
-                    <PersonnelIdentity
-                      agencyId={agencyId}
-                      userId={item.sender?.id}
-                      displayName={item.sender?.display_name}
-                      firstName={item.sender?.first_name}
-                      lastName={item.sender?.last_name}
-                      avatarPath={item.sender?.avatar_path}
-                      rank={item.sender?.rank}
-                      title={item.sender?.title}
-                      unit={item.sender?.unit}
-                      role={authorRole(item.sender)}
-                      size="sm"
-                      showMeta
-                    />
-                  </View>
-                ) : null}
                 {item.deleted_at ? (
                   <AppText variant="body" color="textSubtle">
                     Message deleted
@@ -352,9 +340,9 @@ export function ConversationThread({
                       style={styles.editInput}
                     />
                     <View style={styles.editActions}>
-                      <AppButton
-                        label="Save"
-                        variant="secondary"
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Save edit"
                         disabled={!!busyAction}
                         onPress={() =>
                           void runPref(`edit-${item.id}`, async () => {
@@ -366,70 +354,88 @@ export function ConversationThread({
                             setEditingId(null);
                             setEditBody('');
                           })
-                        }
-                      />
-                      <AppButton
-                        label="Cancel"
-                        variant="ghost"
+                        }>
+                        <AppText variant="caption" color="primary">
+                          Save
+                        </AppText>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel edit"
                         onPress={() => {
                           setEditingId(null);
                           setEditBody('');
-                        }}
-                      />
+                        }}>
+                        <AppText variant="caption" color="textMuted">
+                          Cancel
+                        </AppText>
+                      </Pressable>
                     </View>
                   </View>
                 ) : (
                   <AppText variant="body">{item.body}</AppText>
                 )}
-                <AppText variant="caption" color="textSubtle">
-                  {formatMessageDateTime(item.created_at)}
-                </AppText>
-                {mine && !item.deleted_at ? (
-                  <View style={styles.messageActions}>
-                    {editable ? (
-                      <AppButton
-                        label="Edit"
-                        variant="ghost"
-                        style={styles.tinyButton}
-                        onPress={() => {
-                          setEditingId(item.id);
-                          setEditBody(item.body);
-                        }}
-                      />
-                    ) : null}
-                    <AppButton
-                      label="Delete"
-                      variant="ghost"
-                      style={styles.tinyButton}
-                      disabled={!!busyAction}
-                      onPress={() =>
-                        void runPref(`del-${item.id}`, async () => {
-                          await deleteMessage({ agencyId, messageId: item.id });
-                        })
-                      }
-                    />
-                  </View>
-                ) : null}
+                <View style={styles.metaRow}>
+                  <AppText variant="caption" color="textSubtle">
+                    {formatMessageDateTime(item.created_at)}
+                  </AppText>
+                  {mine && !item.deleted_at && !isEditing ? (
+                    <View style={styles.messageActions}>
+                      {editable ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit message"
+                          onPress={() => {
+                            setEditingId(item.id);
+                            setEditBody(item.body);
+                          }}>
+                          <AppText variant="caption" color="textMuted">
+                            Edit
+                          </AppText>
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete message"
+                        disabled={!!busyAction}
+                        onPress={() =>
+                          void runPref(`del-${item.id}`, async () => {
+                            await deleteMessage({ agencyId, messageId: item.id });
+                          })
+                        }>
+                        <AppText variant="caption" color="danger">
+                          Delete
+                        </AppText>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </View>
           );
         }}
       />
 
-      <View style={styles.composer}>
-        <FormField
-          label="Message"
-          value={body}
-          onChangeText={setBody}
-          placeholder="Write a direct message…"
-          autoCapitalize="sentences"
-          autoCorrect
-          multiline
-          textAlignVertical="top"
-          style={styles.composerInput}
-          editable={!sending}
-          error={bodyError}
-        />
+      <View
+        style={[
+          styles.composer,
+          includeBottomNavInset ? styles.composerWithNav : styles.composerDesktop,
+        ]}>
+        <View style={styles.composerField}>
+          <FormField
+            label="Message"
+            value={body}
+            onChangeText={setBody}
+            placeholder="Write a direct message…"
+            autoCapitalize="sentences"
+            autoCorrect
+            multiline
+            textAlignVertical="top"
+            style={styles.composerInput}
+            editable={!sending}
+            error={bodyError}
+          />
+        </View>
         <AppButton
           label="Send"
           onPress={() => void onSend()}
@@ -457,6 +463,9 @@ const styles = StyleSheet.create({
   header: {
     gap: spacing.sm,
     paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.sm,
   },
   headerActions: {
     flexDirection: 'row',
@@ -469,8 +478,9 @@ const styles = StyleSheet.create({
   },
   listContent: {
     flexGrow: 1,
-    gap: spacing.sm,
-    paddingBottom: spacing.lg,
+    justifyContent: 'flex-end',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
   },
   bubbleRow: {
     width: '100%',
@@ -482,15 +492,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bubble: {
-    maxWidth: '88%',
+    maxWidth: '72%',
     gap: spacing.xs,
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-  },
-  senderIdentity: {
-    marginBottom: spacing.xxs,
   },
   bubbleMine: {
     backgroundColor: colors.primarySoft,
@@ -500,13 +507,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderColor: colors.border,
   },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xxs,
+  },
   messageActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  tinyButton: {
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
+    gap: spacing.md,
   },
   editBlock: {
     gap: spacing.sm,
@@ -518,20 +528,35 @@ const styles = StyleSheet.create({
   },
   editActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   composer: {
     gap: spacing.sm,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: spacing.md,
+    backgroundColor: colors.background,
+  },
+  composerWithNav: {
     paddingBottom: layout.bottomNavHeight + spacing.md,
   },
+  composerDesktop: {
+    paddingBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.md,
+  },
+  composerField: {
+    flex: 1,
+    minWidth: 0,
+  },
   composerInput: {
-    minHeight: 88,
+    minHeight: 72,
+    maxHeight: 140,
     paddingTop: spacing.md,
   },
   sendButton: {
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-end',
+    minWidth: 96,
   },
 });

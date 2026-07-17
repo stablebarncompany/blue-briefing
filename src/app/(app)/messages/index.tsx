@@ -126,7 +126,7 @@ export default function MessagesListScreen() {
 
   if (!currentAgency || !userId) {
     return (
-      <PageContainer scroll={false} contentStyle={styles.page}>
+      <PageContainer contentStyle={styles.page}>
         <EmptyState
           title="Select an agency"
           description="Choose an agency membership before viewing messages."
@@ -180,6 +180,8 @@ export default function MessagesListScreen() {
       data={conversations}
       keyExtractor={(item) => item.conversation.id}
       contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
@@ -197,20 +199,19 @@ export default function MessagesListScreen() {
         )
       }
       renderItem={({ item }) => (
-        <View style={styles.listItem}>
-          <ConversationListItem
-            summary={item}
-            selected={isWide && item.conversation.id === selectedId}
-            onPress={() => {
-              if (isWide) {
-                setSelectedId(item.conversation.id);
-                return;
-              }
-              router.push(conversationDetailHref(item.conversation.id));
-            }}
-          />
-        </View>
+        <ConversationListItem
+          summary={item}
+          selected={isWide && item.conversation.id === selectedId}
+          onPress={() => {
+            if (isWide) {
+              setSelectedId(item.conversation.id);
+              return;
+            }
+            router.push(conversationDetailHref(item.conversation.id));
+          }}
+        />
       )}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
     />
   );
 
@@ -225,6 +226,7 @@ export default function MessagesListScreen() {
                 agencyId={currentAgency.id}
                 conversationId={selected.conversation.id}
                 currentUserId={userId}
+                includeBottomNavInset={false}
                 onMembershipChanged={() => void load('refresh')}
               />
             ) : (
@@ -247,23 +249,28 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     gap: 0,
-    maxWidth: undefined,
+    maxWidth: 1200,
   },
   split: {
     flex: 1,
     minHeight: 0,
     flexDirection: 'row',
-    gap: spacing.lg,
+    gap: 0,
   },
   leftPane: {
-    width: 340,
-    maxWidth: '40%',
+    width: 360,
+    maxWidth: '38%',
+    minWidth: 300,
     minHeight: 0,
+    paddingRight: spacing.lg,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.border,
   },
   rightPane: {
     flex: 1,
     minHeight: 0,
     minWidth: 0,
+    paddingLeft: spacing.lg,
   },
   list: {
     flex: 1,
@@ -274,11 +281,11 @@ const styles = StyleSheet.create({
     paddingBottom: layout.bottomNavHeight + spacing['3xl'],
   },
   listHeader: {
-    gap: spacing.lg,
+    gap: spacing.md,
     paddingBottom: spacing.lg,
   },
   headingBlock: {
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   newButton: {
     alignSelf: 'flex-start',
@@ -286,8 +293,8 @@ const styles = StyleSheet.create({
   archiveToggle: {
     alignSelf: 'flex-start',
   },
-  listItem: {
-    marginBottom: spacing.md,
+  separator: {
+    height: spacing.sm,
   },
   centered: {
     flex: 1,

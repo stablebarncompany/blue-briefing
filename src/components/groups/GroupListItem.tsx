@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppCard, AppText } from '@/components/common';
-import { colors, spacing } from '@/theme';
+import { AppText } from '@/components/common';
+import { colors, radius, spacing } from '@/theme';
 import type { GroupWithMeta } from '@/types/groups';
 
 export type GroupListItemProps = {
@@ -17,12 +17,14 @@ export function GroupListItem({ group, selected, onPress }: GroupListItemProps) 
       accessibilityLabel={`Open group ${group.name}`}
       accessibilityState={{ selected: !!selected }}
       onPress={onPress}
-      style={({ pressed }) => [pressed ? styles.pressed : null]}>
-      <AppCard
-        raised={selected}
-        style={[styles.card, selected ? styles.selected : null]}>
-        <View style={styles.row}>
-          <AppText variant="title" style={styles.name}>
+      style={({ pressed }) => [
+        styles.row,
+        selected ? styles.selected : null,
+        pressed ? styles.pressed : null,
+      ]}>
+      <View style={styles.text}>
+        <View style={styles.titleRow}>
+          <AppText variant="body" style={styles.name} numberOfLines={1}>
             {group.name}
           </AppText>
           {group.is_archived ? (
@@ -32,7 +34,7 @@ export function GroupListItem({ group, selected, onPress }: GroupListItemProps) 
           ) : null}
         </View>
         {group.description ? (
-          <AppText variant="caption" color="textMuted" numberOfLines={2}>
+          <AppText variant="caption" color="textMuted" numberOfLines={1}>
             {group.description}
           </AppText>
         ) : null}
@@ -41,27 +43,50 @@ export function GroupListItem({ group, selected, onPress }: GroupListItemProps) 
           {group.is_private ? ' · Invite only' : ''}
           {group.is_moderator ? ' · Moderator' : ''}
         </AppText>
-      </AppCard>
+      </View>
+      {selected ? <View style={styles.selectedBar} accessibilityElementsHidden /> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.92,
-  },
-  card: {
-    gap: spacing.sm,
+  row: {
+    position: 'relative',
+    gap: spacing.xxs,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   selected: {
     borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
-  row: {
+  pressed: {
+    opacity: 0.92,
+  },
+  text: {
+    gap: spacing.xxs,
+    paddingRight: spacing.sm,
+  },
+  titleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   name: {
     flex: 1,
+    fontWeight: '600',
+  },
+  selectedBar: {
+    position: 'absolute',
+    left: 0,
+    top: spacing.sm,
+    bottom: spacing.sm,
+    width: 3,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
   },
 });

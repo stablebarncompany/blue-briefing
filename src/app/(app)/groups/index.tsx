@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -125,7 +126,7 @@ export default function GroupsListScreen() {
 
   if (!currentAgency || !userId) {
     return (
-      <PageContainer scroll={false} contentStyle={styles.page}>
+      <PageContainer contentStyle={styles.page}>
         <EmptyState
           title="Select an agency"
           description="Choose an agency membership before viewing groups."
@@ -134,7 +135,7 @@ export default function GroupsListScreen() {
     );
   }
 
-  const listHeader = (
+  const listControls = (
     <View style={styles.listHeader}>
       <View style={styles.headingBlock}>
         <AppText variant="display">Groups</AppText>
@@ -169,35 +170,21 @@ export default function GroupsListScreen() {
     </View>
   );
 
-  const listPane = (
-    <FlatList
-      style={styles.list}
-      data={groups}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={() => void load('refresh')}
-          tintColor={colors.primary}
+  const groupItems = (
+    <View style={styles.groupList}>
+      {groups.length === 0 && !isLoading && !errorMessage ? (
+        <EmptyState
+          title="No groups yet"
+          description={
+            canCreate
+              ? 'Create an invite-only channel for your agency watch.'
+              : 'Ask a supervisor or administrator to add you to a group.'
+          }
         />
-      }
-      ListHeaderComponent={listHeader}
-      ListEmptyComponent={
-        isLoading || errorMessage ? null : (
-          <EmptyState
-            title="No groups yet"
-            description={
-              canCreate
-                ? 'Create an invite-only channel for your agency watch.'
-                : 'Ask a supervisor or administrator to add you to a group.'
-            }
-          />
-        )
-      }
-      renderItem={({ item }) => (
-        <View style={styles.listItem}>
+      ) : (
+        groups.map((item) => (
           <GroupListItem
+            key={item.id}
             group={item}
             selected={isWide && item.id === selectedGroupId}
             onPress={() => {
@@ -208,16 +195,19 @@ export default function GroupsListScreen() {
               router.push(groupDetailHref(item.id));
             }}
           />
-        </View>
+        ))
       )}
-    />
+    </View>
   );
 
-  return (
-    <PageContainer scroll={false} contentStyle={styles.page}>
-      {isWide ? (
+  if (isWide) {
+    return (
+      <PageContainer contentStyle={styles.widePage}>
         <View style={styles.split}>
-          <View style={styles.leftPane}>{listPane}</View>
+          <View style={styles.leftPane}>
+            {listControls}
+            {groupItems}
+          </View>
           <View style={styles.rightPane}>
             {selectedGroup ? (
               <GroupDetailPanel
@@ -225,6 +215,7 @@ export default function GroupsListScreen() {
                 groupId={selectedGroup.id}
                 currentUserId={userId}
                 role={role}
+                embedInPageScroll
                 onArchived={() => void load('refresh')}
               />
             ) : (
@@ -235,9 +226,27 @@ export default function GroupsListScreen() {
             )}
           </View>
         </View>
-      ) : (
-        listPane
-      )}
+      </PageContainer>
+    );
+  }
+
+  return (
+    <PageContainer scroll={false} contentStyle={styles.page}>
+      <ScrollView
+        style={styles.mobileScroll}
+        contentContainerStyle={styles.mobileScrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void load('refresh')}
+            tintColor={colors.primary}
+          />
+        }>
+        {listControls}
+        {groupItems}
+      </ScrollView>
     </PageContainer>
   );
 }
@@ -249,42 +258,50 @@ const styles = StyleSheet.create({
     gap: 0,
     maxWidth: undefined,
   },
+  widePage: {
+    maxWidth: 1200,
+    gap: 0,
+    paddingBottom: spacing['4xl'],
+  },
   split: {
-    flex: 1,
-    minHeight: 0,
     flexDirection: 'row',
-    gap: spacing.lg,
+    alignItems: 'flex-start',
+    gap: spacing['2xl'],
   },
   leftPane: {
-    width: 340,
-    maxWidth: '40%',
-    minHeight: 0,
+    width: 360,
+    maxWidth: '34%',
+    minWidth: 300,
+    gap: spacing.lg,
   },
   rightPane: {
     flex: 1,
-    minHeight: 0,
     minWidth: 0,
-  },
-  list: {
-    flex: 1,
-    minHeight: 0,
-  },
-  listContent: {
-    flexGrow: 1,
-    paddingBottom: layout.bottomNavHeight + spacing['3xl'],
+    gap: spacing.lg,
+    paddingLeft: spacing.lg,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.border,
   },
   listHeader: {
-    gap: spacing.lg,
-    paddingBottom: spacing.lg,
+    gap: spacing.md,
   },
   headingBlock: {
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   createButton: {
     alignSelf: 'flex-start',
   },
-  listItem: {
-    marginBottom: spacing.md,
+  groupList: {
+    gap: spacing.sm,
+  },
+  mobileScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  mobileScrollContent: {
+    gap: spacing.lg,
+    paddingBottom: layout.bottomNavHeight + spacing['3xl'],
+    ...(Platform.OS === 'web' ? ({ flexGrow: 1 } as const) : null),
   },
   centered: {
     flex: 1,

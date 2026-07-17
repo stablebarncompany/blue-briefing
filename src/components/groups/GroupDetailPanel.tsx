@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -13,6 +13,7 @@ import {
 import { GroupPostCard } from '@/components/groups/GroupPostCard';
 import {
   AppButton,
+  AppCard,
   AppText,
   EmptyState,
   FormField,
@@ -55,6 +56,8 @@ export type GroupDetailPanelProps = {
   currentUserId: string;
   role: AgencyRole | null | undefined;
   onArchived?: () => void;
+  /** When true, render without an inner scroll container (for page-level scrolling). */
+  embedInPageScroll?: boolean;
 };
 
 export function GroupDetailPanel({
@@ -63,6 +66,7 @@ export function GroupDetailPanel({
   currentUserId,
   role,
   onArchived,
+  embedInPageScroll = false,
 }: GroupDetailPanelProps) {
   const [group, setGroup] = useState<GroupWithMeta | null>(null);
   const [posts, setPosts] = useState<GroupPostWithMeta[]>([]);
@@ -221,41 +225,45 @@ export function GroupDetailPanel({
     );
   }
 
-  const header = (
-    <View style={styles.header}>
-      <AppText variant="display">{group.name}</AppText>
-      {group.description ? (
-        <AppText variant="body" color="textMuted">
-          {group.description}
-        </AppText>
-      ) : null}
-      <AppText variant="caption" color="textSubtle">
-        {group.member_count} members
-        {group.is_private ? ' · Invite only' : ''}
-        {group.is_archived ? ' · Archived' : ''}
-      </AppText>
-
-      {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
-
-      <View style={styles.headerActions}>
-        <AppButton
-          label={showMembers ? 'Hide members' : 'Members'}
-          variant="ghost"
-          onPress={() => setShowMembers((value) => !value)}
-        />
-        {canArchive && !group.is_archived ? (
-          <AppButton
-            label="Archive"
-            variant="ghost"
-            disabled={!!busyAction}
-            onPress={confirmArchive}
-          />
+  const content = (
+    <View style={styles.content}>
+      <View style={styles.header}>
+        <AppText variant="title">{group.name}</AppText>
+        {group.description ? (
+          <AppText variant="body" color="textMuted">
+            {group.description}
+          </AppText>
         ) : null}
+        <AppText variant="caption" color="textSubtle">
+          {group.member_count} members
+          {group.is_private ? ' · Invite only' : ''}
+          {group.is_archived ? ' · Archived' : ''}
+        </AppText>
+
+        {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
+
+        <View style={styles.headerActions}>
+          <AppButton
+            label={showMembers ? 'Hide members' : 'Members'}
+            variant="ghost"
+            onPress={() => setShowMembers((value) => !value)}
+          />
+          {canArchive && !group.is_archived ? (
+            <AppButton
+              label="Archive"
+              variant="ghost"
+              disabled={!!busyAction}
+              onPress={confirmArchive}
+            />
+          ) : null}
+        </View>
       </View>
 
       {showMembers ? (
         <View style={styles.membersPanel}>
-          <AppText variant="title">Members</AppText>
+          <AppText variant="label" color="textSubtle">
+            Members
+          </AppText>
           {members.map((member) => (
             <View key={member.id} style={styles.memberRow}>
               <View style={styles.memberMeta}>
@@ -386,12 +394,12 @@ export function GroupDetailPanel({
       ) : null}
 
       {!group.is_archived ? (
-        <View style={styles.composer}>
+        <AppCard padded={false} style={styles.composerCard}>
           <FormField
-            label="New post"
+            label="Post an update"
             value={postBody}
             onChangeText={setPostBody}
-            placeholder="Share an update. Use @All to notify the group as a mention."
+            placeholder="Share an update with this group…"
             autoCapitalize="sentences"
             autoCorrect
             multiline
@@ -400,112 +408,127 @@ export function GroupDetailPanel({
             editable={!submittingPost}
             error={postError}
           />
+          <AppText variant="caption" color="textSubtle">
+            Tip: use @All to mention everyone in the group.
+          </AppText>
           <AppButton
-            label="Post to group"
+            label="Post"
             onPress={() => void onCreatePost()}
             loading={submittingPost}
             disabled={submittingPost || !!busyAction}
             style={styles.postButton}
           />
-        </View>
+        </AppCard>
       ) : (
         <InlineFormMessage
           message="This group is archived. Posting is unavailable."
           tone="info"
         />
       )}
+
+      <View style={styles.feed}>
+        <AppText variant="label" color="textSubtle">
+          Posts
+        </AppText>
+        {posts.length === 0 ? (
+          <EmptyState
+            title="No posts yet"
+            description="Start the conversation with the first group post."
+          />
+        ) : (
+          posts.map((item) => (
+            <GroupPostCard
+              key={item.id}
+              post={item}
+              replies={repliesByPost[item.id] ?? []}
+              repliesLoading={!!loadingReplies[item.id]}
+              canPin={canModerate}
+              canDeletePost={canDeleteGroupPost({
+                role,
+                isModerator: group.is_moderator,
+                authorId: item.author_id,
+                currentUserId,
+              })}
+              canDeleteReply={(reply) =>
+                reply.author_id === currentUserId ||
+                canModerateGroupContent({ role, isModerator: group.is_moderator })
+              }
+              busy={!!busyAction}
+              onToggleReplies={() => {
+                if (!repliesByPost[item.id]) {
+                  void loadReplies(item.id);
+                }
+              }}
+              onReply={async (body) => {
+                await createGroupPostReply({
+                  agencyId,
+                  postId: item.id,
+                  authorId: currentUserId,
+                  body,
+                });
+                await loadReplies(item.id);
+                await load('refresh');
+              }}
+              onPin={() =>
+                void runBusy(`pin-${item.id}`, async () => {
+                  await setGroupPostPinned({
+                    agencyId,
+                    postId: item.id,
+                    isPinned: !item.is_pinned,
+                  });
+                })
+              }
+              onDeletePost={() =>
+                void runBusy(`del-post-${item.id}`, async () => {
+                  await deleteGroupPost({ agencyId, postId: item.id });
+                })
+              }
+              onDeleteReply={(replyId) =>
+                void runBusy(`del-reply-${replyId}`, async () => {
+                  await deleteGroupPostReply({ agencyId, replyId });
+                  await loadReplies(item.id);
+                })
+              }
+            />
+          ))
+        )}
+      </View>
     </View>
   );
 
+  if (embedInPageScroll) {
+    return content;
+  }
+
   return (
-    <FlatList
-      style={styles.list}
-      data={posts}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
           onRefresh={() => void load('refresh')}
           tintColor={colors.primary}
         />
-      }
-      ListHeaderComponent={header}
-      ListEmptyComponent={
-        <EmptyState
-          title="No posts yet"
-          description="Start the conversation with the first group post."
-        />
-      }
-      renderItem={({ item }) => (
-        <View style={styles.postWrap}>
-          <GroupPostCard
-            post={item}
-            replies={repliesByPost[item.id] ?? []}
-            repliesLoading={!!loadingReplies[item.id]}
-            canPin={canModerate}
-            canDeletePost={canDeleteGroupPost({
-              role,
-              isModerator: group.is_moderator,
-              authorId: item.author_id,
-              currentUserId,
-            })}
-            canDeleteReply={(reply) =>
-              reply.author_id === currentUserId ||
-              canModerateGroupContent({ role, isModerator: group.is_moderator })
-            }
-            busy={!!busyAction}
-            onToggleReplies={() => {
-              if (!repliesByPost[item.id]) {
-                void loadReplies(item.id);
-              }
-            }}
-            onReply={async (body) => {
-              await createGroupPostReply({
-                agencyId,
-                postId: item.id,
-                authorId: currentUserId,
-                body,
-              });
-              await loadReplies(item.id);
-              await load('refresh');
-            }}
-            onPin={() =>
-              void runBusy(`pin-${item.id}`, async () => {
-                await setGroupPostPinned({
-                  agencyId,
-                  postId: item.id,
-                  isPinned: !item.is_pinned,
-                });
-              })
-            }
-            onDeletePost={() =>
-              void runBusy(`del-post-${item.id}`, async () => {
-                await deleteGroupPost({ agencyId, postId: item.id });
-              })
-            }
-            onDeleteReply={(replyId) =>
-              void runBusy(`del-reply-${replyId}`, async () => {
-                await deleteGroupPostReply({ agencyId, replyId });
-                await loadReplies(item.id);
-              })
-            }
-          />
-        </View>
-      )}
-    />
+      }>
+      {content}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  list: {
+  scroll: {
     flex: 1,
     minHeight: 0,
   },
-  listContent: {
+  scrollContent: {
     flexGrow: 1,
-    gap: spacing.md,
     paddingBottom: layout.bottomNavHeight + spacing['3xl'],
+  },
+  content: {
+    gap: spacing.lg,
   },
   centered: {
     flex: 1,
@@ -515,13 +538,13 @@ const styles = StyleSheet.create({
     padding: spacing['3xl'],
   },
   header: {
-    gap: spacing.md,
-    paddingBottom: spacing.lg,
+    gap: spacing.sm,
   },
   headerActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   membersPanel: {
     gap: spacing.md,
@@ -568,17 +591,18 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
-  composer: {
+  composerCard: {
     gap: spacing.sm,
+    padding: spacing.lg,
   },
   postInput: {
-    minHeight: 110,
+    minHeight: 96,
     paddingTop: spacing.md,
   },
   postButton: {
     alignSelf: 'flex-start',
   },
-  postWrap: {
-    marginBottom: spacing.sm,
+  feed: {
+    gap: spacing.md,
   },
 });

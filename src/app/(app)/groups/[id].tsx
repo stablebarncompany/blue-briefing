@@ -28,7 +28,7 @@ export default function GroupDetailScreen() {
   }
 
   return (
-    <PageContainer scroll={false} contentStyle={styles.page}>
+    <PageContainer contentStyle={styles.page}>
       <View style={styles.toolbar}>
         <AppButton label="Back" variant="ghost" onPress={() => router.back()} style={styles.back} />
       </View>
@@ -37,6 +37,7 @@ export default function GroupDetailScreen() {
         groupId={groupId}
         currentUserId={user.id}
         role={currentMembership?.role}
+        embedInPageScroll
         onArchived={() => router.replace(GROUPS_HREF)}
       />
     </PageContainer>
@@ -45,9 +46,8 @@ export default function GroupDetailScreen() {
 
 const styles = StyleSheet.create({
   page: {
-    flex: 1,
-    minHeight: 0,
-    gap: spacing.sm,
+    gap: spacing.md,
+    maxWidth: 800,
   },
   toolbar: {
     gap: spacing.sm,

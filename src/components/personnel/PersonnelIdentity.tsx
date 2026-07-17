@@ -62,14 +62,21 @@ export function PersonnelIdentity({
     canResolve && loaded?.path === avatarPath ? loaded.url : null;
 
   useEffect(() => {
-    if (!agencyId || !avatarPath) {
+    const agency = agencyId ?? null;
+    const path = avatarPath ?? null;
+    if (!agency || !path) {
       return;
     }
     let cancelled = false;
-    void createSignedPersonnelAvatarUrl({ agencyId, storagePath: avatarPath })
+    void createSignedPersonnelAvatarUrl({ agencyId: agency, storagePath: path })
       .then((url) => {
-        if (!cancelled) {
-          setLoaded({ path: avatarPath, url });
+        if (cancelled) {
+          return;
+        }
+        if (url) {
+          setLoaded({ path, url });
+        } else {
+          setLoaded(null);
         }
       })
       .catch(() => {

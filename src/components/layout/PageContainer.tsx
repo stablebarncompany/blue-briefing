@@ -20,9 +20,10 @@ export function PageContainer({
     return (
       <ScrollView
         style={[styles.flex, style]}
-        contentContainerStyle={[styles.content, contentStyle]}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.inner}>{children}</View>
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
+        <View style={[styles.inner, contentStyle]}>{children}</View>
       </ScrollView>
     );
   }
