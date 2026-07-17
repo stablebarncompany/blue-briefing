@@ -6,7 +6,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import {
   BriefingCard,
@@ -26,6 +26,7 @@ import {
   BriefingServiceError,
   listBriefings,
 } from '@/services/briefings';
+import { listAgencyShifts } from '@/services/shifts';
 import { colors, layout, spacing } from '@/theme';
 import {
   DEFAULT_BRIEFING_FILTERS,
@@ -33,16 +34,29 @@ import {
   type BriefingFilters,
   type BriefingWithMeta,
 } from '@/types/briefings';
+import {
+  buildShiftFilterOptions,
+  resolveShiftFilterKey,
+  type AgencyShift,
+} from '@/types/shifts';
 
 export default function BriefingsListScreen() {
   const { user } = useAuth();
   const { currentAgency, isLoading: agencyLoading } = useAgency();
+  const params = useLocalSearchParams<{ shift?: string | string[] }>();
   const agencyId = currentAgency?.id ?? null;
   const userId = user?.id ?? null;
+  const shiftParam =
+    typeof params.shift === 'string' ? params.shift : params.shift?.[0] ?? '';
 
-  const [filters, setFilters] = useState<BriefingFilters>(DEFAULT_BRIEFING_FILTERS);
+  const [filters, setFilters] = useState<BriefingFilters>(() =>
+    shiftParam
+      ? { ...DEFAULT_BRIEFING_FILTERS, shift: shiftParam }
+      : DEFAULT_BRIEFING_FILTERS,
+  );
   const [items, setItems] = useState<BriefingWithMeta[]>([]);
   const [optionSource, setOptionSource] = useState<BriefingWithMeta[]>([]);
+  const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -140,23 +154,51 @@ export default function BriefingsListScreen() {
       queueMicrotask(() => {
         if (!cancelled) {
           void load(hasLoadedOnceRef.current ? 'refresh' : 'initial');
+          if (agencyId) {
+            void listAgencyShifts({ agencyId, includeInactive: false })
+              .then((rows) => {
+                if (!cancelled) {
+                  setAgencyShifts(rows);
+                }
+              })
+              .catch(() => {
+                if (!cancelled) {
+                  setAgencyShifts([]);
+                }
+              });
+          } else {
+            setAgencyShifts([]);
+          }
         }
       });
       return () => {
         cancelled = true;
       };
-    }, [load]),
+    }, [agencyId, load]),
   );
 
-  const shiftOptions = useMemo(() => {
-    const values = new Set<string>();
-    for (const item of optionSource) {
-      if (item.shift_name?.trim()) {
-        values.add(item.shift_name.trim());
-      }
+  const shiftFilterOptions = useMemo(
+    () =>
+      buildShiftFilterOptions({
+        agencyShifts,
+        historicalNames: optionSource.map((item) => item.shift_name),
+      }),
+    [agencyShifts, optionSource],
+  );
+
+  const shiftOptions = useMemo(
+    () => shiftFilterOptions.map((option) => option.label),
+    [shiftFilterOptions],
+  );
+
+  // Keep URL/query/filter selection matched to a canonical label when possible.
+  const normalizedShiftFilter = useMemo(() => {
+    const key = resolveShiftFilterKey(filters.shift, shiftFilterOptions);
+    if (key === 'all') {
+      return 'all';
     }
-    return [...values].sort((a, b) => a.localeCompare(b));
-  }, [optionSource]);
+    return shiftFilterOptions.find((option) => option.key === key)?.label ?? filters.shift ?? 'all';
+  }, [filters.shift, shiftFilterOptions]);
 
   const categoryOptions = useMemo(() => {
     const values = new Set<string>();
@@ -210,10 +252,17 @@ export default function BriefingsListScreen() {
       />
 
       <BriefingFiltersBar
-        filters={filters}
+        filters={{ ...filters, shift: normalizedShiftFilter }}
         shiftOptions={shiftOptions}
         categoryOptions={categoryOptions}
-        onChange={setFilters}
+        onChange={(next) => {
+          const key = resolveShiftFilterKey(next.shift, shiftFilterOptions);
+          const label =
+            key === 'all'
+              ? 'all'
+              : (shiftFilterOptions.find((option) => option.key === key)?.label ?? next.shift);
+          setFilters({ ...next, shift: label });
+        }}
       />
 
       {filtersActive ? (

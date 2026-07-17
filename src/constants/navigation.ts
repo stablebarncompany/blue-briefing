@@ -51,6 +51,11 @@ export const MESSAGES_NEW_HREF = '/messages/new' as Href;
 export const MORE_HREF = '/more' as Href;
 export const PERSONNEL_HREF = '/personnel' as Href;
 export const PERSONNEL_INVITE_HREF = '/personnel/invite' as Href;
+export const PERSONNEL_SHIFTS_HREF = '/personnel/shifts' as Href;
+
+export function personnelShiftDetailHref(shiftId: string): Href {
+  return `/personnel/shifts/${shiftId}` as Href;
+}
 export const NOTIFICATIONS_HREF = '/notifications' as Href;
 export const ACCEPT_INVITE_HREF = '/accept-invite' as Href;
 export const SIGN_IN_HREF = '/sign-in' as Href;

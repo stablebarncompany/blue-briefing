@@ -15,7 +15,7 @@ import {
 import { PageContainer } from '@/components/layout';
 import { PersonnelIdentity } from '@/components/personnel/PersonnelIdentity';
 import { UnitSelect, resolveUnitSelection, splitUnitSelection } from '@/components/personnel';
-import { PERSONNEL_HREF } from '@/constants/navigation';
+import { PERSONNEL_HREF, PERSONNEL_SHIFTS_HREF } from '@/constants/navigation';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
 import { useIsWideLayout } from '@/hooks/use-is-wide-layout';
@@ -50,6 +50,19 @@ import {
   updatePersonnelProfile,
   uploadPersonnelAvatar,
 } from '@/services/personnel-profiles';
+import {
+  ShiftServiceError,
+  assignPersonnelToShift,
+  listAgencyShifts,
+  listShiftAssignments,
+  removeShiftAssignment,
+} from '@/services/shifts';
+import {
+  formatShiftAssignmentType,
+  formatShiftHours,
+  type AgencyShift,
+  type PersonnelShiftAssignment,
+} from '@/types/shifts';
 import { UNIT_OTHER_VALUE, normalizeOptionLabel } from '@/constants/personnelOptions';
 import { colors, spacing } from '@/theme';
 import type { AgencyRole } from '@/types/agency';
@@ -92,6 +105,8 @@ export default function PersonnelProfileScreen() {
   const [agencyGroups, setAgencyGroups] = useState<AgencyGroupOption[]>([]);
   const [agencyUnitNames, setAgencyUnitNames] = useState<string[]>([]);
   const [knownUnits, setKnownUnits] = useState<string[]>([]);
+  const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
+  const [shiftAssignments, setShiftAssignments] = useState<PersonnelShiftAssignment[]>([]);
   const [section, setSection] = useState<SectionKey>('overview');
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -164,18 +179,25 @@ export default function PersonnelProfileScreen() {
       setProfile(next);
       hydrateForm(next);
 
-      const [nextCerts, groups, allGroups, units, roster] = await Promise.all([
-        listPersonnelCertifications({ agencyId, userId }).catch(() => []),
-        listMemberGroups(agencyId, userId),
-        listAgencyGroupsForPersonnel(agencyId),
-        listAgencyUnits(agencyId),
-        listPersonnel(agencyId),
-      ]);
+      const [nextCerts, groups, allGroups, units, roster, shifts, assignments] =
+        await Promise.all([
+          listPersonnelCertifications({ agencyId, userId }).catch(() => []),
+          listMemberGroups(agencyId, userId),
+          listAgencyGroupsForPersonnel(agencyId),
+          listAgencyUnits(agencyId),
+          listPersonnel(agencyId),
+          listAgencyShifts({ agencyId, includeInactive: false }).catch(() => [] as AgencyShift[]),
+          listShiftAssignments({ agencyId, userId, activeOnly: true }).catch(
+            () => [] as PersonnelShiftAssignment[],
+          ),
+        ]);
       setCerts(nextCerts);
       setMemberGroups(groups);
       setAgencyGroups(allGroups);
       setAgencyUnitNames(units.map((unit) => unit.name));
       setKnownUnits(uniqueUnitsFromPersonnel(roster));
+      setAgencyShifts(shifts);
+      setShiftAssignments(assignments);
 
       if (next.can_view_emergency_contacts) {
         setContacts(await listEmergencyContacts({ agencyId, userId }));
@@ -396,8 +418,11 @@ export default function PersonnelProfileScreen() {
       />
 
       <AppText variant="caption" color="textMuted">
-        Badge: {profile.badge_number ?? '—'} · Shift: {profile.shift_name ?? '—'} · Status:{' '}
-        {formatMembershipStatus(profile.status)}
+        Badge: {profile.badge_number ?? '—'} · Shift:{' '}
+        {shiftAssignments.find((row) => row.assignment_type === 'primary')?.shift_name ||
+          profile.shift_name ||
+          '—'}{' '}
+        · Status: {formatMembershipStatus(profile.status)}
       </AppText>
 
       {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
@@ -459,7 +484,17 @@ export default function PersonnelProfileScreen() {
                   setUnitCustom(customValue);
                 }}
               />
-              <FormField label="Shift" value={shiftName} onChangeText={setShiftName} />
+              <FormField
+                label="Legacy shift label (compat)"
+                value={shiftName}
+                onChangeText={setShiftName}
+                placeholder="Prefer Shifts & Assignments"
+              />
+              <AppButton
+                label="Manage shift assignments"
+                variant="ghost"
+                onPress={() => router.push(PERSONNEL_SHIFTS_HREF)}
+              />
               <FormField label="Badge" value={badgeNumber} onChangeText={setBadgeNumber} />
               <FormField label="Employee number" value={employeeNumber} onChangeText={setEmployeeNumber} />
               <FormField label="Hire date (YYYY-MM-DD)" value={hireDate} onChangeText={setHireDate} />
@@ -527,8 +562,112 @@ export default function PersonnelProfileScreen() {
           <AppText variant="body">Rank: {profile.rank ?? '—'}</AppText>
           <AppText variant="body">Title: {profile.title ?? '—'}</AppText>
           <AppText variant="body">Unit: {profile.unit ?? '—'}</AppText>
-          <AppText variant="body">Shift: {profile.shift_name ?? '—'}</AppText>
           <AppText variant="body">Supervisor: {profile.supervisor_name ?? '—'}</AppText>
+          <AppText variant="label" color="textSubtle">
+            Shift assignments
+          </AppText>
+          {shiftAssignments.length === 0 ? (
+            <AppText variant="body" color="textMuted">
+              No relational shift assignments.
+              {profile.shift_name ? ` Legacy label: ${profile.shift_name}` : ''}
+            </AppText>
+          ) : (
+            shiftAssignments.map((assignment) => (
+              <View key={assignment.id} style={styles.shiftRow}>
+                <AppText variant="body">
+                  {assignment.shift_name ?? 'Shift'} ·{' '}
+                  {formatShiftAssignmentType(assignment.assignment_type)}
+                </AppText>
+                <AppText variant="caption" color="textMuted">
+                  {formatShiftHours(assignment.start_time, assignment.end_time)}
+                  {assignment.effective_start || assignment.effective_end
+                    ? ` · ${assignment.effective_start ?? '…'} → ${assignment.effective_end ?? '…'}`
+                    : ''}
+                </AppText>
+                {manager && assignment.user_id !== user?.id ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove shift assignment"
+                    disabled={saving}
+                    onPress={() => {
+                      if (!agencyId) return;
+                      void (async () => {
+                        setSaving(true);
+                        setErrorMessage(null);
+                        try {
+                          await removeShiftAssignment({
+                            agencyId,
+                            assignmentId: assignment.id,
+                          });
+                          await load();
+                        } catch (error) {
+                          setErrorMessage(
+                            error instanceof ShiftServiceError
+                              ? error.message
+                              : 'Unable to remove assignment.',
+                          );
+                        } finally {
+                          setSaving(false);
+                        }
+                      })();
+                    }}>
+                    <AppText variant="caption" color="danger">
+                      Remove
+                    </AppText>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))
+          )}
+          {manager && agencyShifts.length > 0 ? (
+            <View style={styles.shiftAssign}>
+              <AppText variant="caption" color="textMuted">
+                Assign primary shift
+              </AppText>
+              <View style={styles.chipRow}>
+                {agencyShifts.map((shift) => (
+                  <Pressable
+                    key={shift.id}
+                    accessibilityRole="button"
+                    disabled={saving}
+                    onPress={() => {
+                      if (!agencyId) return;
+                      void (async () => {
+                        setSaving(true);
+                        setErrorMessage(null);
+                        try {
+                          await assignPersonnelToShift({
+                            agencyId,
+                            shiftId: shift.id,
+                            input: { userId, assignmentType: 'primary' },
+                          });
+                          await load();
+                          setInfoMessage(`Assigned to ${shift.name}.`);
+                        } catch (error) {
+                          setErrorMessage(
+                            error instanceof ShiftServiceError
+                              ? error.message
+                              : 'Unable to assign shift.',
+                          );
+                        } finally {
+                          setSaving(false);
+                        }
+                      })();
+                    }}
+                    style={styles.chip}>
+                    <AppText variant="caption" color="textMuted">
+                      {shift.name}
+                    </AppText>
+                  </Pressable>
+                ))}
+              </View>
+              <AppButton
+                label="Open Shifts & Assignments"
+                variant="ghost"
+                onPress={() => router.push(PERSONNEL_SHIFTS_HREF)}
+              />
+            </View>
+          ) : null}
           {profile.status_notes ? (
             <AppText variant="caption" color="textSubtle">
               Notes: {profile.status_notes}
@@ -812,6 +951,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  shiftRow: {
+    gap: spacing.xxs,
+    paddingVertical: spacing.xs,
+  },
+  shiftAssign: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   flex: {
     flex: 1,

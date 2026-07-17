@@ -19,7 +19,11 @@ import {
   canPrintRoster,
   printPersonnelRoster,
 } from '@/components/personnel';
-import { PERSONNEL_INVITE_HREF, personnelMemberHref } from '@/constants/navigation';
+import {
+  PERSONNEL_INVITE_HREF,
+  PERSONNEL_SHIFTS_HREF,
+  personnelMemberHref,
+} from '@/constants/navigation';
 import { useAgency } from '@/hooks/use-agency';
 import { useIsWideLayout } from '@/hooks/use-is-wide-layout';
 import {
@@ -30,6 +34,7 @@ import {
   revokeAgencyInvite,
   uniqueUnitsFromPersonnel,
 } from '@/services/personnel';
+import { listAgencyShifts } from '@/services/shifts';
 import { colors, radius, spacing } from '@/theme';
 import type {
   AgencyInvite,
@@ -45,8 +50,10 @@ import {
   formatMembershipStatus,
   formatPersonnelRole,
   personnelDisplayName,
+  personnelPrimaryShiftLabel,
   sortPersonnelMembers,
 } from '@/types/personnel';
+import type { AgencyShift } from '@/types/shifts';
 import {
   formatEmploymentType,
   isEmploymentType,
@@ -165,7 +172,7 @@ function DesktopMemberRow({
         {member.unit ?? '—'}
       </AppText>
       <AppText variant="caption" color="textMuted" style={styles.colMeta}>
-        {member.shift_name ?? '—'}
+        {personnelPrimaryShiftLabel(member) ?? '—'}
       </AppText>
       <AppText variant="caption" color="textMuted" style={styles.colMeta}>
         {member.badge_number ?? '—'}
@@ -207,6 +214,7 @@ export default function PersonnelScreen() {
   const [members, setMembers] = useState<PersonnelMember[]>([]);
   const [invites, setInvites] = useState<AgencyInvite[]>([]);
   const [agencyUnitNames, setAgencyUnitNames] = useState<string[]>([]);
+  const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
   const [expiredInviteIds, setExpiredInviteIds] = useState<Set<string>>(new Set());
   const [rosterLoading, setRosterLoading] = useState(canBrowseDirectory);
   const [invitesLoading, setInvitesLoading] = useState(allowed);
@@ -223,7 +231,7 @@ export default function PersonnelScreen() {
     setRosterLoading(true);
     setRosterError(null);
     try {
-      const [nextMembers, units] = await Promise.all([
+      const [nextMembers, units, shifts] = await Promise.all([
         listPersonnel(agencyId, {
           search: filters.search,
           role: filters.role,
@@ -234,9 +242,11 @@ export default function PersonnelScreen() {
           status: allowed ? undefined : 'active',
         }),
         listAgencyUnits(agencyId),
+        listAgencyShifts({ agencyId, includeInactive: false }).catch(() => [] as AgencyShift[]),
       ]);
       setMembers(nextMembers);
       setAgencyUnitNames(units.map((unit) => unit.name));
+      setAgencyShifts(shifts);
     } catch (error) {
       setMembers([]);
       setRosterError(
@@ -344,15 +354,18 @@ export default function PersonnelScreen() {
 
   const unitOptions = uniqueUnitsFromPersonnel(members);
   const shiftOptions = useMemo(() => {
+    if (agencyShifts.length > 0) {
+      return agencyShifts.map((shift) => ({ id: shift.id, name: shift.name }));
+    }
     const shifts = new Set<string>();
     for (const member of members) {
-      const shift = member.shift_name?.trim();
+      const shift = personnelPrimaryShiftLabel(member);
       if (shift) {
         shifts.add(shift);
       }
     }
     return [...shifts].sort((a, b) => a.localeCompare(b));
-  }, [members]);
+  }, [agencyShifts, members]);
   const activeMembers = useMemo(
     () => sortPersonnelMembers(
       members.filter((m) => m.status === 'active'),
@@ -527,7 +540,13 @@ export default function PersonnelScreen() {
             <Pressable
               key={item.key}
               accessibilityRole="button"
-              onPress={() => setSection(item.key)}
+              onPress={() => {
+                if (item.key === 'shifts') {
+                  router.push(PERSONNEL_SHIFTS_HREF);
+                  return;
+                }
+                setSection(item.key);
+              }}
               style={[styles.tab, selected ? styles.tabSelected : null]}>
               <AppText variant="caption" color={selected ? 'text' : 'textMuted'}>
                 {item.label}

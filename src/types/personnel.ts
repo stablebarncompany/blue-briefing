@@ -49,7 +49,10 @@ export type PersonnelMember = {
   unit: string | null;
   title: string | null;
   rank: string | null;
+  /** Legacy free-text field; prefer primary_shift_name when present. */
   shift_name: string | null;
+  primary_shift_id?: string | null;
+  primary_shift_name?: string | null;
   badge_number: string | null;
   callsign: string | null;
   employment_type: string | null;
@@ -65,6 +68,10 @@ export type PersonnelMember = {
   avatar_path: string | null;
   group_count?: number | null;
 };
+
+export function personnelPrimaryShiftLabel(member: PersonnelMember): string | null {
+  return member.primary_shift_name?.trim() || member.shift_name?.trim() || null;
+}
 
 export type UpdateMembershipInput = {
   role?: AgencyRole;
@@ -95,6 +102,7 @@ export type PersonnelSortKey =
 
 export type PersonnelSection =
   | 'roster'
+  | 'shifts'
   | 'invitations'
   | 'roles'
   | 'suspended'
@@ -123,6 +131,7 @@ export const PERSONNEL_SECTIONS: {
   managersOnly?: boolean;
 }[] = [
   { key: 'roster', label: 'Directory' },
+  { key: 'shifts', label: 'Shifts & Assignments' },
   { key: 'invitations', label: 'Invitations', managersOnly: true },
   { key: 'roles', label: 'Roles & Access', managersOnly: true },
   { key: 'suspended', label: 'Suspended', managersOnly: true },
@@ -138,6 +147,7 @@ export const ROLE_PERMISSION_SUMMARIES: RolePermissionSummary[] = [
     capabilities: [
       'Manage personnel and invitations',
       'Assign any role including Agency Admin',
+      'Manage agency shifts and assignments',
       'Create and archive groups',
       'Supervise and delete briefings',
       'Manage group members and moderators',
@@ -150,6 +160,7 @@ export const ROLE_PERMISSION_SUMMARIES: RolePermissionSummary[] = [
     capabilities: [
       'Manage personnel and invitations',
       'Assign roles except Agency Admin',
+      'Manage agency shifts and assignments',
       'Create and archive groups',
       'Supervise and delete briefings',
       'Manage group members and moderators',
@@ -160,6 +171,7 @@ export const ROLE_PERMISSION_SUMMARIES: RolePermissionSummary[] = [
     label: 'Supervisor',
     summary: 'Shift supervision without agency-wide personnel admin.',
     capabilities: [
+      'Manage assignments for shifts they supervise',
       'Create groups',
       'Supervise briefings',
       'Manage group members when permitted',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 
@@ -30,15 +30,18 @@ import {
   createBriefing,
   validateCreateBriefingInput,
 } from '@/services/briefings';
+import { listAgencyShifts } from '@/services/shifts';
 import { spacing } from '@/theme';
 import {
   ATTACHMENT_MAX_PER_BRIEFING,
   type PendingAttachment,
 } from '@/types/briefing-attachments';
+import type { AgencyShift } from '@/types/shifts';
 
 export default function CreateBriefingScreen() {
   const { user } = useAuth();
   const { currentAgency } = useAgency();
+  const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
   const [values, setValues] = useState<BriefingFormValues>(EMPTY_BRIEFING_FORM);
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof BriefingFormValues, string>>
@@ -49,6 +52,33 @@ export default function CreateBriefingScreen() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [uploadProgressLabel, setUploadProgressLabel] = useState<string | null>(null);
   const [createdBriefingId, setCreatedBriefingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const agencyId = currentAgency?.id ?? null;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!agencyId) {
+        if (!cancelled) {
+          setAgencyShifts([]);
+        }
+        return;
+      }
+      void listAgencyShifts({ agencyId, includeInactive: false })
+        .then((rows) => {
+          if (!cancelled) {
+            setAgencyShifts(rows);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAgencyShifts([]);
+          }
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAgency?.id]);
 
   async function onAddPhotos() {
     if (submitting || !currentAgency) {
@@ -95,7 +125,7 @@ export default function CreateBriefingScreen() {
       return;
     }
 
-    const input = briefingFormToInput(values);
+    const input = briefingFormToInput(values, agencyShifts);
     const validationError = validateCreateBriefingInput(input);
     if (!createdBriefingId && validationError) {
       const nextErrors: Partial<Record<keyof BriefingFormValues, string>> = {};
@@ -206,6 +236,7 @@ export default function CreateBriefingScreen() {
         onChange={setValues}
         fieldErrors={fieldErrors}
         disabled={submitting || !!createdBriefingId}
+        agencyShifts={agencyShifts}
       />
 
       <PendingAttachmentsPanel

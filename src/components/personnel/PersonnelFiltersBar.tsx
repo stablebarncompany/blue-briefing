@@ -17,11 +17,16 @@ import {
   type PersonnelEmploymentType,
 } from '@/types/personnelProfiles';
 
+export type ShiftFilterOption = {
+  id: string;
+  name: string;
+};
+
 export type PersonnelFiltersBarProps = {
   filters: PersonnelListFilters;
   unitOptions: string[];
   agencyUnits?: string[];
-  shiftOptions?: string[];
+  shiftOptions?: (string | ShiftFilterOption)[];
   onChange: (next: PersonnelListFilters) => void;
 };
 
@@ -159,28 +164,35 @@ export function PersonnelFiltersBar({
         ) : null}
       </View>
 
-      {shiftOptions.length > 0 ? (
-        <View style={styles.rowBlock}>
-          <AppText variant="label" color="textSubtle">
-            Shift
-          </AppText>
-          <View style={styles.chipRow}>
-            <FilterChip
-              label="All"
-              selected={shiftValue === 'all'}
-              onPress={() => onChange({ ...filters, shift: 'all' })}
-            />
-            {shiftOptions.map((shift) => (
+      <View style={styles.rowBlock}>
+        <AppText variant="label" color="textSubtle">
+          Shift
+        </AppText>
+        <View style={styles.chipRow}>
+          <FilterChip
+            label="All"
+            selected={shiftValue === 'all'}
+            onPress={() => onChange({ ...filters, shift: 'all' })}
+          />
+          <FilterChip
+            label="Unassigned"
+            selected={shiftValue === 'unassigned'}
+            onPress={() => onChange({ ...filters, shift: 'unassigned' })}
+          />
+          {shiftOptions.map((shift) => {
+            const id = typeof shift === 'string' ? shift : shift.id;
+            const name = typeof shift === 'string' ? shift : shift.name;
+            return (
               <FilterChip
-                key={shift}
-                label={shift}
-                selected={shiftValue === shift}
-                onPress={() => onChange({ ...filters, shift })}
+                key={id}
+                label={name}
+                selected={shiftValue === id || shiftValue === name}
+                onPress={() => onChange({ ...filters, shift: id })}
               />
-            ))}
-          </View>
+            );
+          })}
         </View>
-      ) : null}
+      </View>
 
       <View style={styles.rowBlock}>
         <AppText variant="label" color="textSubtle">

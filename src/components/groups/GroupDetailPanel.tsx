@@ -36,9 +36,13 @@ import {
   setGroupPostPinned,
   addGroupMember,
 } from '@/services/groups';
-import { listActiveAgencyPersonnel, type AgencyPersonnel } from '@/services/agency';
+import { listPersonnel } from '@/services/personnel';
+import { listAgencyShifts } from '@/services/shifts';
 import { colors, layout, radius, spacing } from '@/theme';
 import type { AgencyRole } from '@/types/agency';
+import type { PersonnelMember } from '@/types/personnel';
+import { personnelDisplayName, personnelPrimaryShiftLabel } from '@/types/personnel';
+import type { AgencyShift } from '@/types/shifts';
 import {
   canArchiveOrDeleteGroups,
   canDeleteGroupPost,
@@ -71,7 +75,9 @@ export function GroupDetailPanel({
   const [group, setGroup] = useState<GroupWithMeta | null>(null);
   const [posts, setPosts] = useState<GroupPostWithMeta[]>([]);
   const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
-  const [personnel, setPersonnel] = useState<AgencyPersonnel[]>([]);
+  const [personnel, setPersonnel] = useState<PersonnelMember[]>([]);
+  const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
+  const [shiftFilter, setShiftFilter] = useState<string>('all');
   const [repliesByPost, setRepliesByPost] = useState<Record<string, GroupPostReplyWithMeta[]>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -93,16 +99,18 @@ export function GroupDetailPanel({
       }
       setErrorMessage(null);
       try {
-        const [nextGroup, nextPosts, nextMembers, nextPersonnel] = await Promise.all([
+        const [nextGroup, nextPosts, nextMembers, nextPersonnel, nextShifts] = await Promise.all([
           getGroup({ agencyId, groupId, currentUserId }),
           listGroupPosts({ agencyId, groupId }),
           listGroupMembers({ agencyId, groupId }),
-          listActiveAgencyPersonnel(agencyId),
+          listPersonnel(agencyId, { status: 'active' }),
+          listAgencyShifts({ agencyId, includeInactive: false }).catch(() => [] as AgencyShift[]),
         ]);
         setGroup(nextGroup);
         setPosts(nextPosts);
         setMembers(nextMembers);
         setPersonnel(nextPersonnel);
+        setAgencyShifts(nextShifts);
       } catch (error) {
         setErrorMessage(
           error instanceof GroupServiceError ? error.message : 'Unable to load group.',
@@ -203,7 +211,21 @@ export function GroupDetailPanel({
   }
 
   const memberIds = new Set(members.map((member) => member.user_id));
-  const addable = personnel.filter((person) => !memberIds.has(person.user_id));
+  const addable = personnel.filter((person) => {
+    if (memberIds.has(person.user_id)) {
+      return false;
+    }
+    if (shiftFilter === 'all') {
+      return true;
+    }
+    if (shiftFilter === 'unassigned') {
+      return !personnelPrimaryShiftLabel(person);
+    }
+    return (
+      person.primary_shift_id === shiftFilter ||
+      personnelPrimaryShiftLabel(person) === shiftFilter
+    );
+  });
 
   if (isLoading) {
     return (
@@ -335,9 +357,55 @@ export function GroupDetailPanel({
               <AppText variant="label" color="textMuted">
                 Add agency member
               </AppText>
+              {agencyShifts.length > 0 ? (
+                <View style={styles.addList}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: shiftFilter === 'all' }}
+                    onPress={() => setShiftFilter('all')}
+                    style={[styles.chip, shiftFilter === 'all' ? styles.chipSelected : null]}>
+                    <AppText variant="caption" color={shiftFilter === 'all' ? 'text' : 'textMuted'}>
+                      All shifts
+                    </AppText>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: shiftFilter === 'unassigned' }}
+                    onPress={() => setShiftFilter('unassigned')}
+                    style={[
+                      styles.chip,
+                      shiftFilter === 'unassigned' ? styles.chipSelected : null,
+                    ]}>
+                    <AppText
+                      variant="caption"
+                      color={shiftFilter === 'unassigned' ? 'text' : 'textMuted'}>
+                      Unassigned
+                    </AppText>
+                  </Pressable>
+                  {agencyShifts.map((shift) => {
+                    const selected = shiftFilter === shift.id;
+                    return (
+                      <Pressable
+                        key={shift.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => setShiftFilter(shift.id)}
+                        style={[styles.chip, selected ? styles.chipSelected : null]}>
+                        <AppText variant="caption" color={selected ? 'text' : 'textMuted'}>
+                          {shift.name}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+              <AppText variant="caption" color="textSubtle">
+                Filter the picker by shift, then select members explicitly. Shift members are not
+                added automatically.
+              </AppText>
               {addable.length === 0 ? (
                 <AppText variant="caption" color="textSubtle">
-                  All active agency personnel are already members.
+                  No matching active personnel available to add.
                 </AppText>
               ) : (
                 <View style={styles.addList}>
@@ -353,17 +421,24 @@ export function GroupDetailPanel({
                         <PersonnelIdentity
                           agencyId={agencyId}
                           userId={person.user_id}
-                          displayName={person.profile?.display_name}
-                          firstName={person.profile?.first_name}
-                          lastName={person.profile?.last_name}
-                          email={person.profile?.email}
-                          rank={null}
+                          displayName={person.display_name}
+                          preferredName={person.preferred_name}
+                          firstName={person.first_name}
+                          lastName={person.last_name}
+                          email={person.email}
+                          avatarPath={person.avatar_path}
+                          rank={person.rank}
                           title={person.title}
                           unit={person.unit}
                           role={person.role}
                           size="sm"
                           showMeta
                         />
+                        <AppText variant="caption" color="textSubtle">
+                          {personnelPrimaryShiftLabel(person) ?? 'No shift'}
+                          {' · '}
+                          {personnelDisplayName(person)}
+                        </AppText>
                       </Pressable>
                     );
                   })}

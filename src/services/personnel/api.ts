@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 
+import { listPrimaryShiftByUser } from '@/services/shifts';
 import { supabase } from '@/services/supabase';
 import type { AgencyRole, MembershipStatus } from '@/types/agency';
 import { isAgencyRole, isMembershipStatus } from '@/types/agency';
@@ -16,6 +17,7 @@ import {
   DEFAULT_INVITE_EXPIRES_DAYS,
   MAX_INVITE_EXPIRES_DAYS,
   isAgencyInviteStatus,
+  personnelPrimaryShiftLabel,
 } from '@/types/personnel';
 
 export class PersonnelServiceError extends Error {
@@ -113,7 +115,8 @@ function applyPersonnelFilters(
   const search = filters.search?.trim().toLowerCase() ?? '';
   const role = filters.role && filters.role !== 'all' ? filters.role : null;
   const unit = filters.unit && filters.unit !== 'all' ? filters.unit.trim().toLowerCase() : null;
-  const shift = filters.shift && filters.shift !== 'all' ? filters.shift.trim().toLowerCase() : null;
+  const shiftFilter =
+    filters.shift && filters.shift !== 'all' ? filters.shift.trim().toLowerCase() : null;
   const employmentType =
     filters.employment_type && filters.employment_type !== 'all'
       ? filters.employment_type.trim().toLowerCase()
@@ -130,8 +133,16 @@ function applyPersonnelFilters(
     if (unit && (item.unit ?? '').trim().toLowerCase() !== unit) {
       return false;
     }
-    if (shift && (item.shift_name ?? '').trim().toLowerCase() !== shift) {
-      return false;
+    if (shiftFilter === 'unassigned') {
+      if (personnelPrimaryShiftLabel(item)) {
+        return false;
+      }
+    } else if (shiftFilter) {
+      const primaryId = item.primary_shift_id?.trim().toLowerCase() ?? '';
+      const primaryLabel = (personnelPrimaryShiftLabel(item) ?? '').toLowerCase();
+      if (primaryId !== shiftFilter && primaryLabel !== shiftFilter) {
+        return false;
+      }
     }
     if (employmentType && (item.employment_type ?? '').trim().toLowerCase() !== employmentType) {
       return false;
@@ -149,6 +160,7 @@ function applyPersonnelFilters(
       item.unit,
       item.title,
       item.rank,
+      item.primary_shift_name,
       item.shift_name,
       item.callsign,
       item.badge_number,
@@ -256,9 +268,32 @@ export async function listPersonnel(
     }
   }
 
-  const members = rows.map((row) =>
+  let members = rows.map((row) =>
     mapPersonnelMember(row as Record<string, unknown>, profiles.get(String(row.user_id)) ?? null),
   );
+
+  try {
+    const primaryByUser = await listPrimaryShiftByUser({ agencyId: scopedAgencyId });
+    members = members.map((member) => {
+      const primary = primaryByUser.get(member.user_id);
+      if (!primary) {
+        return {
+          ...member,
+          primary_shift_id: null,
+          primary_shift_name: null,
+        };
+      }
+      return {
+        ...member,
+        primary_shift_id: primary.shift_id,
+        primary_shift_name: primary.shift_name,
+        // Prefer relational primary for display while preserving legacy field.
+        shift_name: primary.shift_name || member.shift_name,
+      };
+    });
+  } catch {
+    // Migration may not be applied yet; keep legacy shift_name only.
+  }
 
   const filtered = applyPersonnelFilters(members, {
     ...filters,

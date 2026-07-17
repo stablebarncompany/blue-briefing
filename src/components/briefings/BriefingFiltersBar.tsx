@@ -128,17 +128,15 @@ export function BriefingFiltersBar({
         ]}
       />
 
-      {shiftOptions.length > 0 ? (
-        <ChipRow
-          label="Shift"
-          value={shiftValue}
-          onSelect={(shift) => onChange({ ...filters, shift })}
-          options={[
-            { value: 'all', label: 'All' },
-            ...shiftOptions.map((shift) => ({ value: shift, label: shift })),
-          ]}
-        />
-      ) : null}
+      <ChipRow
+        label="Shift"
+        value={shiftValue}
+        onSelect={(shift) => onChange({ ...filters, shift })}
+        options={[
+          { value: 'all', label: 'All' },
+          ...shiftOptions.map((shift) => ({ value: shift, label: shift })),
+        ]}
+      />
 
       {categoryOptions.length > 0 ? (
         <ChipRow

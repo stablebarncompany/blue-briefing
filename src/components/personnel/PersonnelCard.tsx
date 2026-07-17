@@ -8,6 +8,7 @@ import {
   formatMembershipStatus,
   formatPersonnelRole,
   personnelDisplayName,
+  personnelPrimaryShiftLabel,
 } from '@/types/personnel';
 
 export type PersonnelCardProps = {
@@ -43,9 +44,9 @@ export function PersonnelCard({ member, onPress }: PersonnelCardProps) {
           <AppText variant="caption" color="textMuted">
             Status: {formatMembershipStatus(member.status)}
           </AppText>
-          {member.shift_name ? (
+          {personnelPrimaryShiftLabel(member) ? (
             <AppText variant="caption" color="textMuted">
-              Shift: {member.shift_name}
+              Shift: {personnelPrimaryShiftLabel(member)}
             </AppText>
           ) : null}
           {member.badge_number ? (

@@ -24,6 +24,7 @@ import {
   BriefingServiceError,
   getHomeBriefingSummary,
 } from '@/services/briefings';
+import { listShiftAssignments } from '@/services/shifts';
 import { colors, spacing } from '@/theme';
 import type { BriefingWithMeta } from '@/types/briefings';
 
@@ -42,12 +43,14 @@ export default function HomeScreen() {
   const userId = user?.id ?? null;
 
   const [summary, setSummary] = useState<HomeSummary | null>(null);
+  const [primaryShiftName, setPrimaryShiftName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!agencyId || !userId) {
       setSummary(null);
+      setPrimaryShiftName(null);
       setIsLoading(false);
       return;
     }
@@ -55,11 +58,16 @@ export default function HomeScreen() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const next = await getHomeBriefingSummary({
-        agencyId,
-        currentUserId: userId,
-      });
+      const [next, assignments] = await Promise.all([
+        getHomeBriefingSummary({
+          agencyId,
+          currentUserId: userId,
+        }),
+        listShiftAssignments({ agencyId, userId, activeOnly: true }).catch(() => []),
+      ]);
       setSummary(next);
+      const primary = assignments.find((row) => row.assignment_type === 'primary');
+      setPrimaryShiftName(primary?.shift_name ?? null);
       await refreshNotificationBadge();
     } catch (error) {
       const message =
@@ -108,6 +116,27 @@ export default function HomeScreen() {
 
       {!isLoading && currentAgency && summary ? (
         <>
+          {primaryShiftName ? (
+            <AppCard raised style={styles.shiftCard}>
+              <AppText variant="caption" color="textSubtle">
+                Your primary shift
+              </AppText>
+              <AppText variant="title">{primaryShiftName}</AppText>
+              <AppText variant="caption" color="textMuted">
+                Assignment only — not an on-duty clock status.
+              </AppText>
+              <AppButton
+                label={`Briefings for ${primaryShiftName}`}
+                variant="ghost"
+                onPress={() =>
+                  router.push(
+                    `${BRIEFINGS_HREF}?shift=${encodeURIComponent(primaryShiftName)}` as typeof BRIEFINGS_HREF,
+                  )
+                }
+              />
+            </AppCard>
+          ) : null}
+
           <View style={styles.statsRow}>
             <AppCard raised style={styles.statCard}>
               <AppText variant="caption" color="textSubtle">
@@ -192,6 +221,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
     paddingVertical: spacing['4xl'],
+  },
+  shiftCard: {
+    gap: spacing.sm,
   },
   statsRow: {
     flexDirection: 'row',

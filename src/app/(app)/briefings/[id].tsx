@@ -31,6 +31,7 @@ import {
   updateBriefing,
   validateCreateBriefingInput,
 } from '@/services/briefings';
+import { listAgencyShifts } from '@/services/shifts';
 import { colors, spacing } from '@/theme';
 import {
   canEditBriefing,
@@ -40,6 +41,7 @@ import {
   type BriefingAckWithProfile,
   type BriefingWithMeta,
 } from '@/types/briefings';
+import type { AgencyShift } from '@/types/shifts';
 
 function toFormValues(briefing: BriefingWithMeta): BriefingFormValues {
   return {
@@ -72,6 +74,7 @@ export default function BriefingDetailScreen() {
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState<BriefingFormValues | null>(null);
   const [attachmentsRefreshKey, setAttachmentsRefreshKey] = useState(0);
+  const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
 
   const role = currentMembership?.role;
   const canSupervise = canSuperviseBriefings(role);
@@ -124,6 +127,32 @@ export default function BriefingDetailScreen() {
     });
   }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!agencyId) {
+        if (!cancelled) {
+          setAgencyShifts([]);
+        }
+        return;
+      }
+      void listAgencyShifts({ agencyId, includeInactive: false })
+        .then((rows) => {
+          if (!cancelled) {
+            setAgencyShifts(rows);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAgencyShifts([]);
+          }
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [agencyId]);
+
   async function runAction(actionKey: string, action: () => Promise<void>) {
     if (busyAction) {
       return;
@@ -169,7 +198,7 @@ export default function BriefingDetailScreen() {
     if (!agencyId || !briefing || !editValues) {
       return;
     }
-    const input = briefingFormToInput(editValues);
+    const input = briefingFormToInput(editValues, agencyShifts);
     const validationError = validateCreateBriefingInput(input);
     if (validationError) {
       setActionError(validationError);
@@ -253,6 +282,7 @@ export default function BriefingDetailScreen() {
             values={editValues}
             onChange={setEditValues}
             disabled={busyAction === 'save'}
+            agencyShifts={agencyShifts}
           />
           <View style={styles.actionRow}>
             <AppButton

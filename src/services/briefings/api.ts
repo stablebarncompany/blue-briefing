@@ -22,6 +22,7 @@ import {
   isBriefingPriority,
   isBriefingStatus,
 } from '@/types/briefings';
+import { formatShiftNameForStorage, shiftsMatch } from '@/types/shifts';
 
 export class BriefingServiceError extends Error {
   constructor(message: string) {
@@ -133,7 +134,7 @@ function applyClientFilters(items: BriefingWithMeta[], filters: BriefingFilters)
       return false;
     }
     if (shift !== 'all') {
-      if ((item.shift_name ?? '').toLowerCase() !== shift.toLowerCase()) {
+      if (!shiftsMatch(item.shift_name, shift)) {
         return false;
       }
     }
@@ -357,7 +358,7 @@ export async function createBriefing(options: {
     author_id: options.authorId,
     title: options.input.title.trim(),
     body: options.input.body.trim(),
-    shift_name: options.input.shift_name?.trim() || null,
+    shift_name: formatShiftNameForStorage(options.input.shift_name),
     category: options.input.category?.trim() || null,
     priority: options.input.priority ?? 'medium',
     case_number: options.input.case_number?.trim() || null,
@@ -402,7 +403,7 @@ export async function updateBriefing(options: {
     patch.body = body;
   }
   if (options.input.shift_name !== undefined) {
-    const shift = options.input.shift_name?.trim() || null;
+    const shift = formatShiftNameForStorage(options.input.shift_name);
     if (shift && shift.length > SHIFT_MAX_LENGTH) {
       throw new BriefingServiceError(`Shift name must be ${SHIFT_MAX_LENGTH} characters or fewer.`);
     }

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText, FormField } from '@/components/common';
+import { ShiftSelect } from '@/components/shifts';
 import { colors, radius, spacing } from '@/theme';
 import {
   BRIEFING_PRIORITIES,
@@ -14,6 +15,11 @@ import {
   type BriefingPriority,
   type CreateBriefingInput,
 } from '@/types/briefings';
+import {
+  formatShiftNameForStorage,
+  shiftsMatch,
+  type AgencyShift,
+} from '@/types/shifts';
 
 export type BriefingFormValues = {
   title: string;
@@ -39,11 +45,20 @@ export const EMPTY_BRIEFING_FORM: BriefingFormValues = {
   requires_acknowledgement: true,
 };
 
-export function briefingFormToInput(values: BriefingFormValues): CreateBriefingInput {
+export function briefingFormToInput(
+  values: BriefingFormValues,
+  agencyShifts: AgencyShift[] = [],
+): CreateBriefingInput {
+  const rawShift = values.shift_name.trim();
+  const catalogMatch = agencyShifts.find((shift) => shiftsMatch(shift.name, rawShift));
+  const shift_name = catalogMatch
+    ? catalogMatch.name.trim().replace(/\s+/g, ' ')
+    : formatShiftNameForStorage(rawShift);
+
   return {
     title: values.title,
     body: values.body,
-    shift_name: values.shift_name,
+    shift_name,
     category: values.category,
     priority: values.priority,
     case_number: values.case_number,
@@ -61,6 +76,7 @@ export type BriefingFormFieldsProps = {
   onChange: (next: BriefingFormValues) => void;
   fieldErrors?: Partial<Record<keyof BriefingFormValues, string>>;
   disabled?: boolean;
+  agencyShifts?: AgencyShift[];
 };
 
 export function BriefingFormFields({
@@ -68,6 +84,7 @@ export function BriefingFormFields({
   onChange,
   fieldErrors,
   disabled,
+  agencyShifts = [],
 }: BriefingFormFieldsProps) {
   function setField<K extends keyof BriefingFormValues>(key: K, value: BriefingFormValues[K]) {
     onChange({ ...values, [key]: value });
@@ -118,16 +135,54 @@ export function BriefingFormFields({
         </Pressable>
       </View>
 
-      <FormField
-        label="Shift name"
-        value={values.shift_name}
-        onChangeText={(shift_name) => setField('shift_name', shift_name)}
-        placeholder="Day / Evening / Night"
-        autoCapitalize="words"
-        maxLength={SHIFT_MAX_LENGTH}
-        editable={!disabled}
-        error={fieldErrors?.shift_name}
-      />
+      {agencyShifts.length > 0 ? (
+        <ShiftSelect
+          label="Shift"
+          agencyShifts={agencyShifts}
+          value={
+            agencyShifts.find((shift) => shiftsMatch(shift.name, values.shift_name))?.id ??
+            (values.shift_name ? 'custom' : '')
+          }
+          customValue={
+            agencyShifts.some((shift) => shiftsMatch(shift.name, values.shift_name))
+              ? ''
+              : values.shift_name
+          }
+          allowNone
+          allowCustom
+          disabled={disabled}
+          error={fieldErrors?.shift_name}
+          onChange={(next) => {
+            if (next.mode === 'none') {
+              setField('shift_name', '');
+              return;
+            }
+            if (next.mode === 'shift' && next.shiftId) {
+              const catalog = agencyShifts.find((shift) => shift.id === next.shiftId);
+              setField(
+                'shift_name',
+                (catalog?.name ?? next.name).trim().replace(/\s+/g, ' ').slice(0, SHIFT_MAX_LENGTH),
+              );
+              return;
+            }
+            setField(
+              'shift_name',
+              (formatShiftNameForStorage(next.name) ?? '').slice(0, SHIFT_MAX_LENGTH),
+            );
+          }}
+        />
+      ) : (
+        <FormField
+          label="Shift name"
+          value={values.shift_name}
+          onChangeText={(shift_name) => setField('shift_name', shift_name)}
+          placeholder="Day / Evening / Night"
+          autoCapitalize="words"
+          maxLength={SHIFT_MAX_LENGTH}
+          editable={!disabled}
+          error={fieldErrors?.shift_name}
+        />
+      )}
 
       <View style={styles.priorityBlock}>
         <AppText variant="label" color="textMuted">
