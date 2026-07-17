@@ -1,3 +1,4 @@
+import { listPersonnelIdentitySummaries } from '@/services/personnel-profiles';
 import { supabase } from '@/services/supabase';
 import type {
   CreateGroupInput,
@@ -84,30 +85,39 @@ function mapReply(row: Record<string, unknown>): GroupPostReply {
   };
 }
 
-async function fetchAuthorsByIds(userIds: string[]): Promise<Map<string, GroupAuthor>> {
+async function fetchAuthorsByIds(
+  agencyId: string,
+  userIds: string[],
+): Promise<Map<string, GroupAuthor>> {
   const unique = [...new Set(userIds.filter(Boolean))];
   const map = new Map<string, GroupAuthor>();
   if (unique.length === 0) {
     return map;
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, first_name, last_name')
-    .in('id', unique);
-
-  if (error) {
-    throw new GroupServiceError(error.message || 'Unable to load member profiles.');
+  try {
+    const identities = await listPersonnelIdentitySummaries({ agencyId, userIds: unique });
+    for (const userId of unique) {
+      const identity = identities.get(userId);
+      map.set(userId, {
+        id: userId,
+        display_name: identity?.preferred_name || identity?.display_name || null,
+        first_name: identity?.first_name ?? null,
+        last_name: identity?.last_name ?? null,
+        preferred_name: identity?.preferred_name ?? null,
+        avatar_path: identity?.avatar_path ?? null,
+        rank: identity?.rank ?? null,
+        title: identity?.title ?? null,
+        unit: identity?.unit ?? null,
+        role: identity?.role ?? null,
+      });
+    }
+  } catch (error) {
+    throw new GroupServiceError(
+      error instanceof Error ? error.message : 'Unable to load member profiles.',
+    );
   }
 
-  for (const row of data ?? []) {
-    map.set(row.id, {
-      id: row.id,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-    });
-  }
   return map;
 }
 
@@ -395,7 +405,7 @@ export async function listGroupMembers(options: {
   }
 
   const rows = (data ?? []).map((row) => mapMember(row as Record<string, unknown>));
-  const authors = await fetchAuthorsByIds(rows.map((row) => row.user_id));
+  const authors = await fetchAuthorsByIds(agencyId, rows.map((row) => row.user_id));
   return rows.map((row) => ({
     ...row,
     profile: authors.get(row.user_id) ?? null,
@@ -487,7 +497,7 @@ export async function listGroupPosts(options: {
   }
 
   const posts = (data ?? []).map((row) => mapPost(row as Record<string, unknown>));
-  const authors = await fetchAuthorsByIds(posts.map((post) => post.author_id));
+  const authors = await fetchAuthorsByIds(agencyId, posts.map((post) => post.author_id));
   const postIds = posts.map((post) => post.id);
   const replyCounts = new Map<string, number>();
 
@@ -631,7 +641,7 @@ export async function listGroupPostReplies(options: {
   }
 
   const replies = (data ?? []).map((row) => mapReply(row as Record<string, unknown>));
-  const authors = await fetchAuthorsByIds(replies.map((reply) => reply.author_id));
+  const authors = await fetchAuthorsByIds(agencyId, replies.map((reply) => reply.author_id));
   return replies.map((reply) => ({
     ...reply,
     author: authors.get(reply.author_id) ?? null,

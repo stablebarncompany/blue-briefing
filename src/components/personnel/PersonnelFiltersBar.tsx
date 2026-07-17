@@ -11,11 +11,17 @@ import { colors, radius, spacing } from '@/theme';
 import { AGENCY_ROLES, type AgencyRole } from '@/types/agency';
 import type { PersonnelListFilters } from '@/types/personnel';
 import { formatPersonnelRole } from '@/types/personnel';
+import {
+  EMPLOYMENT_TYPES,
+  formatEmploymentType,
+  type PersonnelEmploymentType,
+} from '@/types/personnelProfiles';
 
 export type PersonnelFiltersBarProps = {
   filters: PersonnelListFilters;
   unitOptions: string[];
   agencyUnits?: string[];
+  shiftOptions?: string[];
   onChange: (next: PersonnelListFilters) => void;
 };
 
@@ -44,12 +50,15 @@ export function PersonnelFiltersBar({
   filters,
   unitOptions,
   agencyUnits = [],
+  shiftOptions = [],
   onChange,
 }: PersonnelFiltersBarProps) {
   const [roleQuery, setRoleQuery] = useState('');
   const [unitQuery, setUnitQuery] = useState('');
   const roleValue = filters.role ?? 'all';
   const unitValue = filters.unit ?? 'all';
+  const shiftValue = filters.shift ?? 'all';
+  const employmentValue = filters.employment_type ?? 'all';
 
   // Filters list known roster + agency-configured units (not the full suggested catalog).
   const mergedUnits = useMemo(
@@ -150,6 +159,52 @@ export function PersonnelFiltersBar({
         ) : null}
       </View>
 
+      {shiftOptions.length > 0 ? (
+        <View style={styles.rowBlock}>
+          <AppText variant="label" color="textSubtle">
+            Shift
+          </AppText>
+          <View style={styles.chipRow}>
+            <FilterChip
+              label="All"
+              selected={shiftValue === 'all'}
+              onPress={() => onChange({ ...filters, shift: 'all' })}
+            />
+            {shiftOptions.map((shift) => (
+              <FilterChip
+                key={shift}
+                label={shift}
+                selected={shiftValue === shift}
+                onPress={() => onChange({ ...filters, shift })}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.rowBlock}>
+        <AppText variant="label" color="textSubtle">
+          Employment type
+        </AppText>
+        <View style={styles.chipRow}>
+          <FilterChip
+            label="All"
+            selected={employmentValue === 'all'}
+            onPress={() => onChange({ ...filters, employment_type: 'all' })}
+          />
+          {EMPLOYMENT_TYPES.map((type) => (
+            <FilterChip
+              key={type}
+              label={formatEmploymentType(type)}
+              selected={employmentValue === type}
+              onPress={() =>
+                onChange({ ...filters, employment_type: type as PersonnelEmploymentType })
+              }
+            />
+          ))}
+        </View>
+      </View>
+
       <AppButton
         label="Clear filters"
         variant="ghost"
@@ -158,6 +213,8 @@ export function PersonnelFiltersBar({
             search: '',
             role: 'all',
             unit: 'all',
+            shift: 'all',
+            employment_type: 'all',
             status: filters.status,
           })
         }

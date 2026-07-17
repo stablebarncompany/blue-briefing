@@ -30,6 +30,12 @@ export type GroupAuthor = {
   display_name: string | null;
   first_name: string | null;
   last_name: string | null;
+  preferred_name?: string | null;
+  avatar_path?: string | null;
+  rank?: string | null;
+  title?: string | null;
+  unit?: string | null;
+  role?: AgencyRole | null;
 };
 
 export type GroupMemberWithProfile = GroupMember & {

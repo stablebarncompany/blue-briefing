@@ -45,6 +45,11 @@ export type BriefingAuthor = {
   display_name: string | null;
   first_name: string | null;
   last_name: string | null;
+  preferred_name?: string | null;
+  avatar_path?: string | null;
+  rank?: string | null;
+  title?: string | null;
+  unit?: string | null;
 };
 
 export type BriefingWithMeta = Briefing & {
@@ -143,11 +148,21 @@ export function formatAuthorName(author: BriefingAuthor | null | undefined): str
   if (!author) {
     return 'Unknown author';
   }
+  if (author.preferred_name?.trim()) {
+    return author.preferred_name.trim();
+  }
   if (author.display_name?.trim()) {
     return author.display_name.trim();
   }
   const combined = [author.first_name, author.last_name].filter(Boolean).join(' ').trim();
   return combined || 'Unknown author';
+}
+
+export function formatAuthorAssignment(author: BriefingAuthor | null | undefined): string {
+  if (!author) {
+    return '';
+  }
+  return [author.rank || author.title, author.unit].filter(Boolean).join(' · ');
 }
 
 export function canSuperviseBriefings(role: AgencyRole | null | undefined): boolean {

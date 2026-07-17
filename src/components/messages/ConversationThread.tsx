@@ -15,6 +15,7 @@ import {
   FormField,
   InlineFormMessage,
 } from '@/components/common';
+import { PersonnelIdentity } from '@/components/personnel';
 import { supabase } from '@/services/supabase';
 import {
   MessageServiceError,
@@ -30,13 +31,20 @@ import {
   validateMessageBody,
 } from '@/services/messages';
 import { colors, layout, radius, spacing } from '@/theme';
+import type { AgencyRole } from '@/types/agency';
+import { isAgencyRole } from '@/types/agency';
 import {
   canEditDirectMessage,
-  formatMessageAuthorName,
   formatMessageDateTime,
   type ConversationSummary,
   type DirectMessageWithMeta,
+  type MessageAuthor,
 } from '@/types/messages';
+
+function authorRole(author: MessageAuthor | null | undefined): AgencyRole | null {
+  const role = author?.role;
+  return role && isAgencyRole(role) ? role : null;
+}
 
 export type ConversationThreadProps = {
   agencyId: string;
@@ -221,22 +229,26 @@ export function ConversationThread({
     );
   }
 
-  const subtitle = [summary.otherMember.role, summary.otherMember.unit, summary.otherMember.title]
-    .filter(Boolean)
-    .join(' · ');
-
   return (
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
       <View style={styles.header}>
-        <AppText variant="title">{formatMessageAuthorName(summary.otherMember)}</AppText>
-        {subtitle ? (
-          <AppText variant="caption" color="textMuted">
-            {subtitle}
-          </AppText>
-        ) : null}
+        <PersonnelIdentity
+          agencyId={agencyId}
+          userId={summary.otherMember.id}
+          displayName={summary.otherMember.display_name}
+          firstName={summary.otherMember.first_name}
+          lastName={summary.otherMember.last_name}
+          avatarPath={summary.otherMember.avatar_path}
+          rank={summary.otherMember.rank}
+          title={summary.otherMember.title}
+          unit={summary.otherMember.unit}
+          role={authorRole(summary.otherMember)}
+          size="md"
+          showMeta
+        />
         <View style={styles.headerActions}>
           <AppButton
             label={summary.membership.is_muted ? 'Unmute' : 'Mute'}
@@ -308,9 +320,22 @@ export function ConversationThread({
             <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
               <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                 {!mine ? (
-                  <AppText variant="caption" color="textSubtle">
-                    {formatMessageAuthorName(item.sender)}
-                  </AppText>
+                  <View style={styles.senderIdentity}>
+                    <PersonnelIdentity
+                      agencyId={agencyId}
+                      userId={item.sender?.id}
+                      displayName={item.sender?.display_name}
+                      firstName={item.sender?.first_name}
+                      lastName={item.sender?.last_name}
+                      avatarPath={item.sender?.avatar_path}
+                      rank={item.sender?.rank}
+                      title={item.sender?.title}
+                      unit={item.sender?.unit}
+                      role={authorRole(item.sender)}
+                      size="sm"
+                      showMeta
+                    />
+                  </View>
                 ) : null}
                 {item.deleted_at ? (
                   <AppText variant="body" color="textSubtle">
@@ -463,6 +488,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+  },
+  senderIdentity: {
+    marginBottom: spacing.xxs,
   },
   bubbleMine: {
     backgroundColor: colors.primarySoft,

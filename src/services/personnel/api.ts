@@ -66,9 +66,12 @@ function mapPersonnelMember(
   row: Record<string, unknown>,
   profile: {
     display_name: string | null;
+    preferred_name: string | null;
     email: string | null;
     first_name: string | null;
     last_name: string | null;
+    avatar_path: string | null;
+    work_phone: string | null;
   } | null,
 ): PersonnelMember {
   const role = String(row.role);
@@ -85,14 +88,21 @@ function mapPersonnelMember(
     status,
     unit: (row.unit as string | null) ?? null,
     title: (row.title as string | null) ?? null,
+    rank: (row.rank as string | null) ?? null,
+    shift_name: (row.shift_name as string | null) ?? null,
     badge_number: (row.badge_number as string | null) ?? null,
+    callsign: (row.callsign as string | null) ?? null,
+    employment_type: (row.employment_type as string | null) ?? null,
+    work_phone: profile?.work_phone ?? null,
     joined_at: (row.joined_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     display_name: profile?.display_name ?? null,
+    preferred_name: profile?.preferred_name ?? null,
     email: profile?.email ?? null,
     first_name: profile?.first_name ?? null,
     last_name: profile?.last_name ?? null,
+    avatar_path: profile?.avatar_path ?? null,
   };
 }
 
@@ -103,6 +113,11 @@ function applyPersonnelFilters(
   const search = filters.search?.trim().toLowerCase() ?? '';
   const role = filters.role && filters.role !== 'all' ? filters.role : null;
   const unit = filters.unit && filters.unit !== 'all' ? filters.unit.trim().toLowerCase() : null;
+  const shift = filters.shift && filters.shift !== 'all' ? filters.shift.trim().toLowerCase() : null;
+  const employmentType =
+    filters.employment_type && filters.employment_type !== 'all'
+      ? filters.employment_type.trim().toLowerCase()
+      : null;
   const status = filters.status && filters.status !== 'all' ? filters.status : null;
 
   return items.filter((item) => {
@@ -115,18 +130,29 @@ function applyPersonnelFilters(
     if (unit && (item.unit ?? '').trim().toLowerCase() !== unit) {
       return false;
     }
+    if (shift && (item.shift_name ?? '').trim().toLowerCase() !== shift) {
+      return false;
+    }
+    if (employmentType && (item.employment_type ?? '').trim().toLowerCase() !== employmentType) {
+      return false;
+    }
     if (!search) {
       return true;
     }
     const haystack = [
       item.display_name,
+      item.preferred_name,
       item.first_name,
       item.last_name,
       item.email,
       item.role,
       item.unit,
       item.title,
+      item.rank,
+      item.shift_name,
+      item.callsign,
       item.badge_number,
+      item.employment_type,
       item.status,
     ]
       .filter(Boolean)
@@ -170,7 +196,11 @@ export async function listPersonnel(
       status,
       unit,
       title,
+      rank,
+      shift_name,
       badge_number,
+      callsign,
+      employment_type,
       joined_at,
       created_at,
       updated_at
@@ -194,16 +224,19 @@ export async function listPersonnel(
     string,
     {
       display_name: string | null;
+      preferred_name: string | null;
       email: string | null;
       first_name: string | null;
       last_name: string | null;
+      avatar_path: string | null;
+      work_phone: string | null;
     }
   >();
 
   if (userIds.length > 0) {
     const { data: profileRows, error: profileError } = await supabase
       .from('profiles')
-      .select('id, display_name, email, first_name, last_name')
+      .select('id, display_name, preferred_name, email, first_name, last_name, avatar_path, work_phone')
       .in('id', userIds);
 
     if (profileError) {
@@ -213,9 +246,12 @@ export async function listPersonnel(
     for (const profile of profileRows ?? []) {
       profiles.set(String(profile.id), {
         display_name: profile.display_name,
+        preferred_name: (profile as { preferred_name?: string | null }).preferred_name ?? null,
         email: profile.email,
         first_name: profile.first_name,
         last_name: profile.last_name,
+        avatar_path: (profile as { avatar_path?: string | null }).avatar_path ?? null,
+        work_phone: (profile as { work_phone?: string | null }).work_phone ?? null,
       });
     }
   }

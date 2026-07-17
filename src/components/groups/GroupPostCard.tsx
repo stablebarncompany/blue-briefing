@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppButton, AppText, FormField, InlineFormMessage } from '@/components/common';
+import { PersonnelIdentity } from '@/components/personnel';
 import { colors, radius, spacing } from '@/theme';
 import {
-  formatGroupAuthorName,
   formatGroupDateTime,
   type GroupPostReplyWithMeta,
   type GroupPostWithMeta,
@@ -78,9 +78,21 @@ export function GroupPostCard({
           {formatGroupDateTime(post.created_at)}
         </AppText>
       </View>
-      <AppText variant="label" color="textMuted">
-        {formatGroupAuthorName(post.author)}
-      </AppText>
+      <PersonnelIdentity
+        agencyId={post.agency_id}
+        userId={post.author?.id}
+        displayName={post.author?.display_name}
+        preferredName={post.author?.preferred_name}
+        firstName={post.author?.first_name}
+        lastName={post.author?.last_name}
+        avatarPath={post.author?.avatar_path}
+        rank={post.author?.rank}
+        title={post.author?.title}
+        unit={post.author?.unit}
+        role={post.author?.role}
+        size="sm"
+        showMeta
+      />
       <AppText variant="body">{post.body}</AppText>
 
       <View style={styles.actions}>
@@ -132,8 +144,23 @@ export function GroupPostCard({
           ) : null}
           {replies.map((reply) => (
             <View key={reply.id} style={styles.reply}>
-              <AppText variant="caption" color="textMuted">
-                {formatGroupAuthorName(reply.author)} · {formatGroupDateTime(reply.created_at)}
+              <PersonnelIdentity
+                agencyId={reply.agency_id}
+                userId={reply.author?.id}
+                displayName={reply.author?.display_name}
+                preferredName={reply.author?.preferred_name}
+                firstName={reply.author?.first_name}
+                lastName={reply.author?.last_name}
+                avatarPath={reply.author?.avatar_path}
+                rank={reply.author?.rank}
+                title={reply.author?.title}
+                unit={reply.author?.unit}
+                role={reply.author?.role}
+                size="sm"
+                showMeta
+              />
+              <AppText variant="caption" color="textSubtle">
+                {formatGroupDateTime(reply.created_at)}
               </AppText>
               <AppText variant="body">{reply.body}</AppText>
               {canDeleteReply?.(reply) && onDeleteReply ? (

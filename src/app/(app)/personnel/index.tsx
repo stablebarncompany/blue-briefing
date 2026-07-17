@@ -15,6 +15,7 @@ import {
   AccountPanel,
   PersonnelCard,
   PersonnelFiltersBar,
+  PersonnelIdentity,
   canPrintRoster,
   printPersonnelRoster,
 } from '@/components/personnel';
@@ -46,11 +47,19 @@ import {
   personnelDisplayName,
   sortPersonnelMembers,
 } from '@/types/personnel';
+import {
+  formatEmploymentType,
+  isEmploymentType,
+} from '@/types/personnelProfiles';
 
 const SORT_OPTIONS: { key: PersonnelSortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'role', label: 'Role' },
+  { key: 'rank', label: 'Rank/Title' },
   { key: 'unit', label: 'Unit' },
+  { key: 'shift', label: 'Shift' },
+  { key: 'employment_type', label: 'Employment' },
+  { key: 'status', label: 'Status' },
   { key: 'badge', label: 'Badge' },
   { key: 'joined', label: 'Joined' },
 ];
@@ -117,37 +126,61 @@ function DesktopMemberRow({
   member: PersonnelMember;
   onPress: () => void;
 }) {
+  const employment =
+    member.employment_type && isEmploymentType(member.employment_type)
+      ? formatEmploymentType(member.employment_type)
+      : (member.employment_type ?? '—');
+
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={`Open profile for ${personnelDisplayName(member)}`}
       onPress={onPress}
       style={({ pressed }) => [styles.tableRow, pressed ? styles.pressed : null]}>
-      <AppText variant="body" style={styles.colName}>
-        {personnelDisplayName(member)}
-      </AppText>
-      <AppText variant="caption" color="textMuted" style={styles.colEmail}>
-        {member.email ?? '—'}
-      </AppText>
+      <View style={styles.colName}>
+        <PersonnelIdentity
+          agencyId={member.agency_id}
+          userId={member.user_id}
+          displayName={member.display_name}
+          preferredName={member.preferred_name}
+          firstName={member.first_name}
+          lastName={member.last_name}
+          email={member.email}
+          avatarPath={member.avatar_path}
+          rank={member.rank}
+          title={member.title}
+          unit={member.unit}
+          role={member.role}
+          size="sm"
+          showMeta={false}
+        />
+      </View>
       <AppText variant="caption" color="textMuted" style={styles.colRole}>
         {formatPersonnelRole(member.role)}
       </AppText>
       <AppText variant="caption" color="textMuted" style={styles.colMeta}>
-        {member.title ?? '—'}
+        {member.rank || member.title || '—'}
       </AppText>
       <AppText variant="caption" color="textMuted" style={styles.colUnit}>
         {member.unit ?? '—'}
       </AppText>
       <AppText variant="caption" color="textMuted" style={styles.colMeta}>
+        {member.shift_name ?? '—'}
+      </AppText>
+      <AppText variant="caption" color="textMuted" style={styles.colMeta}>
         {member.badge_number ?? '—'}
       </AppText>
       <AppText variant="caption" color="textMuted" style={styles.colMeta}>
+        {member.callsign ?? '—'}
+      </AppText>
+      <AppText variant="caption" color="textMuted" style={styles.colMeta}>
+        {member.work_phone ?? '—'}
+      </AppText>
+      <AppText variant="caption" color="textMuted" style={styles.colMeta}>
+        {employment}
+      </AppText>
+      <AppText variant="caption" color="textMuted" style={styles.colMeta}>
         {formatMembershipStatus(member.status)}
-      </AppText>
-      <AppText variant="caption" color="textMuted" style={styles.colMeta}>
-        {member.joined_at ? new Date(member.joined_at).toLocaleDateString() : '—'}
-      </AppText>
-      <AppText variant="caption" color="textMuted" style={styles.colMeta}>
-        {member.group_count ?? 0}
       </AppText>
     </Pressable>
   );
@@ -158,20 +191,24 @@ export default function PersonnelScreen() {
   const agencyId = currentAgency?.id ?? null;
   const isWide = useIsWideLayout();
   const allowed = canManagePersonnel(currentMembership?.role);
+  const canBrowseDirectory = !!agencyId && !!currentMembership;
 
-  const [section, setSection] = useState<PersonnelSection>(allowed ? 'roster' : 'account');
+  const [section, setSection] = useState<PersonnelSection>('roster');
   const [filtersOpen, setFiltersOpen] = useState(isWide);
   const [filters, setFilters] = useState<PersonnelListFilters>({
     search: '',
     role: 'all',
     unit: 'all',
+    shift: 'all',
+    employment_type: 'all',
   });
   const [sortKey, setSortKey] = useState<PersonnelSortKey>('name');
+  const [printMode, setPrintMode] = useState<'basic' | 'contact' | 'assignment'>('basic');
   const [members, setMembers] = useState<PersonnelMember[]>([]);
   const [invites, setInvites] = useState<AgencyInvite[]>([]);
   const [agencyUnitNames, setAgencyUnitNames] = useState<string[]>([]);
   const [expiredInviteIds, setExpiredInviteIds] = useState<Set<string>>(new Set());
-  const [rosterLoading, setRosterLoading] = useState(allowed);
+  const [rosterLoading, setRosterLoading] = useState(canBrowseDirectory);
   const [invitesLoading, setInvitesLoading] = useState(allowed);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [invitesError, setInvitesError] = useState<string | null>(null);
@@ -179,7 +216,7 @@ export default function PersonnelScreen() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const loadRoster = useCallback(async () => {
-    if (!agencyId || !allowed) {
+    if (!agencyId || !canBrowseDirectory) {
       setRosterLoading(false);
       return;
     }
@@ -191,6 +228,10 @@ export default function PersonnelScreen() {
           search: filters.search,
           role: filters.role,
           unit: filters.unit,
+          shift: filters.shift,
+          employment_type: filters.employment_type,
+          // Non-managers only see active peers via directory.
+          status: allowed ? undefined : 'active',
         }),
         listAgencyUnits(agencyId),
       ]);
@@ -199,12 +240,21 @@ export default function PersonnelScreen() {
     } catch (error) {
       setMembers([]);
       setRosterError(
-        error instanceof PersonnelServiceError ? error.message : 'Unable to load roster.',
+        error instanceof PersonnelServiceError ? error.message : 'Unable to load directory.',
       );
     } finally {
       setRosterLoading(false);
     }
-  }, [allowed, agencyId, filters.role, filters.search, filters.unit]);
+  }, [
+    allowed,
+    agencyId,
+    canBrowseDirectory,
+    filters.employment_type,
+    filters.role,
+    filters.search,
+    filters.shift,
+    filters.unit,
+  ]);
 
   const loadInvites = useCallback(async () => {
     if (!agencyId || !allowed) {
@@ -243,15 +293,17 @@ export default function PersonnelScreen() {
         if (cancelled) {
           return;
         }
-        if (allowed) {
+        if (canBrowseDirectory) {
           void loadRoster();
+        }
+        if (allowed) {
           void loadInvites();
         }
       });
       return () => {
         cancelled = true;
       };
-    }, [allowed, loadInvites, loadRoster]),
+    }, [allowed, canBrowseDirectory, loadInvites, loadRoster]),
   );
 
   async function onRevoke(inviteId: string) {
@@ -283,6 +335,7 @@ export default function PersonnelScreen() {
         agencyName: currentAgency?.name ?? 'Agency',
         members: rosterMembers,
         filters,
+        mode: printMode,
       });
     } catch (error) {
       setPrintError(error instanceof Error ? error.message : 'Unable to print roster.');
@@ -290,6 +343,16 @@ export default function PersonnelScreen() {
   }
 
   const unitOptions = uniqueUnitsFromPersonnel(members);
+  const shiftOptions = useMemo(() => {
+    const shifts = new Set<string>();
+    for (const member of members) {
+      const shift = member.shift_name?.trim();
+      if (shift) {
+        shifts.add(shift);
+      }
+    }
+    return [...shifts].sort((a, b) => a.localeCompare(b));
+  }, [members]);
   const activeMembers = useMemo(
     () => sortPersonnelMembers(
       members.filter((m) => m.status === 'active'),
@@ -351,36 +414,39 @@ export default function PersonnelScreen() {
             <AppText variant="label" color="textSubtle" style={styles.colName}>
               Name
             </AppText>
-            <AppText variant="label" color="textSubtle" style={styles.colEmail}>
-              Email
-            </AppText>
             <AppText variant="label" color="textSubtle" style={styles.colRole}>
               Role
             </AppText>
             <AppText variant="label" color="textSubtle" style={styles.colMeta}>
-              Title
+              Rank/Title
             </AppText>
             <AppText variant="label" color="textSubtle" style={styles.colUnit}>
               Unit
             </AppText>
             <AppText variant="label" color="textSubtle" style={styles.colMeta}>
+              Shift
+            </AppText>
+            <AppText variant="label" color="textSubtle" style={styles.colMeta}>
               Badge
             </AppText>
             <AppText variant="label" color="textSubtle" style={styles.colMeta}>
+              Callsign
+            </AppText>
+            <AppText variant="label" color="textSubtle" style={styles.colMeta}>
+              Work
+            </AppText>
+            <AppText variant="label" color="textSubtle" style={styles.colMeta}>
+              Employment
+            </AppText>
+            <AppText variant="label" color="textSubtle" style={styles.colMeta}>
               Status
-            </AppText>
-            <AppText variant="label" color="textSubtle" style={styles.colMeta}>
-              Joined
-            </AppText>
-            <AppText variant="label" color="textSubtle" style={styles.colMeta}>
-              Groups
             </AppText>
           </View>
           {list.map((member) => (
             <DesktopMemberRow
               key={member.id}
               member={member}
-              onPress={() => router.push(personnelMemberHref(member.id))}
+              onPress={() => router.push(personnelMemberHref(member.user_id))}
             />
           ))}
         </View>
@@ -392,7 +458,7 @@ export default function PersonnelScreen() {
           <PersonnelCard
             key={member.id}
             member={member}
-            onPress={() => router.push(personnelMemberHref(member.id))}
+            onPress={() => router.push(personnelMemberHref(member.user_id))}
           />
         ))}
       </View>
@@ -405,7 +471,7 @@ export default function PersonnelScreen() {
         <View style={styles.headerText}>
           <SectionLabel>Personnel</SectionLabel>
           <AppText variant="body" color="textMuted">
-            Manage agency members, invitations, roles, and access.
+            Agency directory, profiles, invitations, and access management.
           </AppText>
           {currentAgency?.name ? (
             <AppText variant="caption" color="textSubtle">
@@ -414,39 +480,44 @@ export default function PersonnelScreen() {
           ) : null}
         </View>
 
-        {allowed ? (
-          <View style={styles.headerActions}>
+        <View style={styles.headerActions}>
+          {allowed ? (
             <AppButton label="Invite member" onPress={() => router.push(PERSONNEL_INVITE_HREF)} />
-            {section === 'roster' || section === 'suspended' || section === 'removed' ? (
-              <>
-                <AppButton
-                  label="Refresh roster"
-                  variant="secondary"
-                  onPress={() => void loadRoster()}
-                  disabled={rosterLoading}
-                />
-                {canPrintRoster() ? (
-                  <AppButton label="Print roster" variant="ghost" onPress={onPrint} />
-                ) : (
-                  <AppButton
-                    label="Print (web only)"
-                    variant="ghost"
-                    disabled
-                    onPress={() => undefined}
-                  />
-                )}
-              </>
-            ) : null}
-            {section === 'invitations' ? (
+          ) : null}
+          {section === 'roster' ||
+          (allowed && (section === 'suspended' || section === 'removed')) ? (
+            <>
               <AppButton
-                label="Refresh invitations"
+                label="Refresh directory"
                 variant="secondary"
-                onPress={() => void loadInvites()}
-                disabled={invitesLoading}
+                onPress={() => void loadRoster()}
+                disabled={rosterLoading}
               />
-            ) : null}
-          </View>
-        ) : null}
+              {canPrintRoster() && section === 'roster' ? (
+                <>
+                  <AppButton
+                    label={`Print: ${printMode}`}
+                    variant="ghost"
+                    onPress={() =>
+                      setPrintMode((mode) =>
+                        mode === 'basic' ? 'contact' : mode === 'contact' ? 'assignment' : 'basic',
+                      )
+                    }
+                  />
+                  <AppButton label="Print roster" variant="ghost" onPress={onPrint} />
+                </>
+              ) : null}
+            </>
+          ) : null}
+          {allowed && section === 'invitations' ? (
+            <AppButton
+              label="Refresh invitations"
+              variant="secondary"
+              onPress={() => void loadInvites()}
+              disabled={invitesLoading}
+            />
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.tabs}>
@@ -554,7 +625,8 @@ export default function PersonnelScreen() {
         </View>
       ) : null}
 
-      {(section === 'roster' || section === 'suspended' || section === 'removed') && allowed ? (
+      {(section === 'roster' && canBrowseDirectory) ||
+      (allowed && (section === 'suspended' || section === 'removed')) ? (
         <>
           {!isWide ? (
             <AppButton
@@ -570,6 +642,7 @@ export default function PersonnelScreen() {
                 filters={filters}
                 unitOptions={unitOptions}
                 agencyUnits={agencyUnitNames}
+                shiftOptions={shiftOptions}
                 onChange={setFilters}
               />
               <View style={styles.sortRow}>
@@ -605,7 +678,18 @@ export default function PersonnelScreen() {
         </>
       ) : null}
 
-      {!allowed && section !== 'account' ? (
+      {!canBrowseDirectory && section === 'roster' ? (
+        <EmptyState
+          title="Select an agency"
+          description="Choose an active agency membership to browse the personnel directory."
+        />
+      ) : null}
+
+      {!allowed &&
+      (section === 'invitations' ||
+        section === 'roles' ||
+        section === 'suspended' ||
+        section === 'removed') ? (
         <EmptyState title="Personnel administration is limited to agency admins and command staff." />
       ) : null}
 

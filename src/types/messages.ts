@@ -29,7 +29,9 @@ export type MessageAuthor = {
   last_name: string | null;
   unit?: string | null;
   title?: string | null;
+  rank?: string | null;
   role?: string | null;
+  avatar_path?: string | null;
 };
 
 export type DirectMessage = {

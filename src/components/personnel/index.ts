@@ -1,5 +1,6 @@
 export { PersonnelCard } from './PersonnelCard';
 export { PersonnelFiltersBar } from './PersonnelFiltersBar';
+export { PersonnelIdentity } from './PersonnelIdentity';
 export {
   EMPTY_INVITE_FORM,
   InviteMemberForm,

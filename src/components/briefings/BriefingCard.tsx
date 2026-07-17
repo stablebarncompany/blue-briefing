@@ -4,6 +4,7 @@ import { AppCard, AppText } from '@/components/common';
 import { BriefingPriorityBadge } from '@/components/briefings/BriefingPriorityBadge';
 import { colors, spacing } from '@/theme';
 import {
+  formatAuthorAssignment,
   formatAuthorName,
   formatBriefingDateTime,
   previewBriefingBody,
@@ -52,8 +53,13 @@ export function BriefingCard({ briefing, onPress }: BriefingCardProps) {
         </View>
 
         <AppText variant="caption" color="textMuted">
-          {formatAuthorName(briefing.author)}
-          {briefing.category ? ` · ${briefing.category}` : ''}
+          {[
+            formatAuthorName(briefing.author),
+            formatAuthorAssignment(briefing.author),
+            briefing.category,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </AppText>
 
         <AppText variant="body" color="textMuted" numberOfLines={3}>

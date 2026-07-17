@@ -71,6 +71,11 @@ export function conversationDetailHref(id: string): Href {
   return `/messages/${id}` as Href;
 }
 
-export function personnelMemberHref(id: string): Href {
-  return `/personnel/${id}` as Href;
+/** Profile route keyed by agency member user id. */
+export function personnelMemberHref(userId: string): Href {
+  return `/personnel/${userId}` as Href;
+}
+
+export function personnelProfileHref(userId: string): Href {
+  return personnelMemberHref(userId);
 }

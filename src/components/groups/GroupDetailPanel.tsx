@@ -18,6 +18,7 @@ import {
   FormField,
   InlineFormMessage,
 } from '@/components/common';
+import { PersonnelIdentity } from '@/components/personnel';
 import {
   GroupServiceError,
   archiveGroup,
@@ -42,13 +43,11 @@ import {
   canDeleteGroupPost,
   canManageGroupMembers,
   canModerateGroupContent,
-  formatGroupAuthorName,
   type GroupMemberWithProfile,
   type GroupPostReplyWithMeta,
   type GroupPostWithMeta,
   type GroupWithMeta,
 } from '@/types/groups';
-import { formatPersonnelRole } from '@/types/personnel';
 
 export type GroupDetailPanelProps = {
   agencyId: string;
@@ -260,7 +259,21 @@ export function GroupDetailPanel({
           {members.map((member) => (
             <View key={member.id} style={styles.memberRow}>
               <View style={styles.memberMeta}>
-                <AppText variant="body">{formatGroupAuthorName(member.profile)}</AppText>
+                <PersonnelIdentity
+                  agencyId={agencyId}
+                  userId={member.user_id}
+                  displayName={member.profile?.display_name}
+                  preferredName={member.profile?.preferred_name}
+                  firstName={member.profile?.first_name}
+                  lastName={member.profile?.last_name}
+                  avatarPath={member.profile?.avatar_path}
+                  rank={member.profile?.rank}
+                  title={member.profile?.title}
+                  unit={member.profile?.unit}
+                  role={member.profile?.role}
+                  size="sm"
+                  showMeta
+                />
                 <AppText variant="caption" color="textSubtle">
                   {member.is_moderator ? 'Moderator' : 'Member'}
                 </AppText>
@@ -322,13 +335,6 @@ export function GroupDetailPanel({
                 <View style={styles.addList}>
                   {addable.map((person) => {
                     const selected = memberToAdd === person.user_id;
-                    const label =
-                      person.profile?.display_name ||
-                      [person.profile?.first_name, person.profile?.last_name]
-                        .filter(Boolean)
-                        .join(' ') ||
-                      person.profile?.email ||
-                      'Agency member';
                     return (
                       <Pressable
                         key={person.user_id}
@@ -336,14 +342,20 @@ export function GroupDetailPanel({
                         accessibilityState={{ selected }}
                         onPress={() => setMemberToAdd(person.user_id)}
                         style={[styles.chip, selected ? styles.chipSelected : null]}>
-                        <AppText variant="caption" color={selected ? 'text' : 'textMuted'}>
-                          {label}
-                        </AppText>
-                        <AppText variant="caption" color="textSubtle">
-                          Role: {formatPersonnelRole(person.role)}
-                          {person.title ? ` · Title: ${person.title}` : ''}
-                          {person.unit ? ` · Unit: ${person.unit}` : ''}
-                        </AppText>
+                        <PersonnelIdentity
+                          agencyId={agencyId}
+                          userId={person.user_id}
+                          displayName={person.profile?.display_name}
+                          firstName={person.profile?.first_name}
+                          lastName={person.profile?.last_name}
+                          email={person.profile?.email}
+                          rank={null}
+                          title={person.title}
+                          unit={person.unit}
+                          role={person.role}
+                          size="sm"
+                          showMeta
+                        />
                       </Pressable>
                     );
                   })}

@@ -1,6 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { AgencyPersonnel } from '@/services/agency';
-import { listActiveAgencyPersonnel } from '@/services/agency';
+import { listPersonnelIdentitySummaries } from '@/services/personnel-profiles';
 import type {
   Conversation,
   ConversationMember,
@@ -73,46 +72,26 @@ async function fetchAuthorsByIds(
     return map;
   }
 
-  const [profilesResult, personnel] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, display_name, first_name, last_name')
-      .in('id', unique),
-    listActiveAgencyPersonnel(agencyId).catch(() => [] as AgencyPersonnel[]),
-  ]);
-
-  if (profilesResult.error) {
-    throw new MessageServiceError(profilesResult.error.message || 'Unable to load member profiles.');
-  }
-
-  const personnelById = new Map(personnel.map((row) => [row.user_id, row]));
-
-  for (const row of profilesResult.data ?? []) {
-    const person = personnelById.get(row.id);
-    map.set(row.id, {
-      id: row.id,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      unit: person?.unit ?? null,
-      title: person?.title ?? null,
-      role: person?.role ?? null,
-    });
-  }
-
-  for (const userId of unique) {
-    if (!map.has(userId)) {
-      const person = personnelById.get(userId);
+  try {
+    const identities = await listPersonnelIdentitySummaries({ agencyId, userIds: unique });
+    for (const userId of unique) {
+      const identity = identities.get(userId);
       map.set(userId, {
         id: userId,
-        display_name: person?.profile?.display_name ?? null,
-        first_name: person?.profile?.first_name ?? null,
-        last_name: person?.profile?.last_name ?? null,
-        unit: person?.unit ?? null,
-        title: person?.title ?? null,
-        role: person?.role ?? null,
+        display_name: identity?.preferred_name || identity?.display_name || null,
+        first_name: identity?.first_name ?? null,
+        last_name: identity?.last_name ?? null,
+        unit: identity?.unit ?? null,
+        title: identity?.title ?? null,
+        rank: identity?.rank ?? null,
+        role: identity?.role ?? null,
+        avatar_path: identity?.avatar_path ?? null,
       });
     }
+  } catch (error) {
+    throw new MessageServiceError(
+      error instanceof Error ? error.message : 'Unable to load member profiles.',
+    );
   }
 
   return map;

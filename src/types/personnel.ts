@@ -48,14 +48,21 @@ export type PersonnelMember = {
   status: MembershipStatus;
   unit: string | null;
   title: string | null;
+  rank: string | null;
+  shift_name: string | null;
   badge_number: string | null;
+  callsign: string | null;
+  employment_type: string | null;
+  work_phone: string | null;
   joined_at: string | null;
   created_at: string;
   updated_at: string;
   display_name: string | null;
+  preferred_name: string | null;
   email: string | null;
   first_name: string | null;
   last_name: string | null;
+  avatar_path: string | null;
   group_count?: number | null;
 };
 
@@ -70,10 +77,21 @@ export type PersonnelListFilters = {
   search?: string;
   role?: AgencyRole | 'all';
   unit?: string | 'all';
+  shift?: string | 'all';
+  employment_type?: string | 'all';
   status?: MembershipStatus | 'all';
 };
 
-export type PersonnelSortKey = 'name' | 'role' | 'unit' | 'badge' | 'joined';
+export type PersonnelSortKey =
+  | 'name'
+  | 'role'
+  | 'rank'
+  | 'unit'
+  | 'shift'
+  | 'employment_type'
+  | 'badge'
+  | 'joined'
+  | 'status';
 
 export type PersonnelSection =
   | 'roster'
@@ -104,7 +122,7 @@ export const PERSONNEL_SECTIONS: {
   label: string;
   managersOnly?: boolean;
 }[] = [
-  { key: 'roster', label: 'Roster', managersOnly: true },
+  { key: 'roster', label: 'Directory' },
   { key: 'invitations', label: 'Invitations', managersOnly: true },
   { key: 'roles', label: 'Roles & Access', managersOnly: true },
   { key: 'suspended', label: 'Suspended', managersOnly: true },
@@ -216,7 +234,13 @@ export function formatPersonnelRole(role: AgencyRole): string {
 
 export function personnelDisplayName(member: PersonnelMember): string {
   const composed = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
-  return member.display_name?.trim() || composed || member.email || 'Member';
+  return (
+    member.preferred_name?.trim() ||
+    member.display_name?.trim() ||
+    composed ||
+    member.email ||
+    'Member'
+  );
 }
 
 export function sortPersonnelMembers(
@@ -228,8 +252,16 @@ export function sortPersonnelMembers(
     switch (sortKey) {
       case 'role':
         return formatPersonnelRole(a.role).localeCompare(formatPersonnelRole(b.role));
+      case 'rank':
+        return (a.rank || a.title || '').localeCompare(b.rank || b.title || '');
       case 'unit':
         return (a.unit ?? '').localeCompare(b.unit ?? '');
+      case 'shift':
+        return (a.shift_name ?? '').localeCompare(b.shift_name ?? '');
+      case 'employment_type':
+        return (a.employment_type ?? '').localeCompare(b.employment_type ?? '');
+      case 'status':
+        return a.status.localeCompare(b.status);
       case 'badge':
         return (a.badge_number ?? '').localeCompare(b.badge_number ?? '', undefined, {
           numeric: true,

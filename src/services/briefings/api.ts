@@ -1,3 +1,4 @@
+import { listPersonnelIdentitySummaries } from '@/services/personnel-profiles';
 import { supabase } from '@/services/supabase';
 import type {
   Briefing,
@@ -65,30 +66,38 @@ function mapBriefing(row: Record<string, unknown>): Briefing {
   };
 }
 
-async function fetchAuthorsByIds(authorIds: string[]): Promise<Map<string, BriefingAuthor>> {
+async function fetchAuthorsByIds(
+  agencyId: string,
+  authorIds: string[],
+): Promise<Map<string, BriefingAuthor>> {
   const unique = [...new Set(authorIds.filter(Boolean))];
   const map = new Map<string, BriefingAuthor>();
   if (unique.length === 0) {
     return map;
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, first_name, last_name')
-    .in('id', unique);
-
-  if (error) {
-    throw new BriefingServiceError(error.message || 'Unable to load briefing authors.');
+  try {
+    const identities = await listPersonnelIdentitySummaries({ agencyId, userIds: unique });
+    for (const userId of unique) {
+      const identity = identities.get(userId);
+      map.set(userId, {
+        id: userId,
+        display_name: identity?.preferred_name || identity?.display_name || null,
+        first_name: identity?.first_name ?? null,
+        last_name: identity?.last_name ?? null,
+        preferred_name: identity?.preferred_name ?? null,
+        avatar_path: identity?.avatar_path ?? null,
+        rank: identity?.rank ?? null,
+        title: identity?.title ?? null,
+        unit: identity?.unit ?? null,
+      });
+    }
+  } catch (error) {
+    throw new BriefingServiceError(
+      error instanceof Error ? error.message : 'Unable to load briefing authors.',
+    );
   }
 
-  for (const row of data ?? []) {
-    map.set(row.id, {
-      id: row.id,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-    });
-  }
   return map;
 }
 
@@ -205,8 +214,12 @@ export function validateCreateBriefingInput(input: CreateBriefingInput): string 
 async function attachMeta(
   briefings: Briefing[],
   currentUserId: string,
+  agencyId: string,
 ): Promise<BriefingWithMeta[]> {
-  const authors = await fetchAuthorsByIds(briefings.map((item) => item.author_id));
+  const authors = await fetchAuthorsByIds(
+    agencyId,
+    briefings.map((item) => item.author_id),
+  );
   const briefingIds = briefings.map((item) => item.id);
 
   let acknowledgements: BriefingAcknowledgement[] = [];
@@ -282,7 +295,7 @@ export async function listBriefings(options: {
   }
 
   const briefings = (data ?? []).map((row) => mapBriefing(row as Record<string, unknown>));
-  const withMeta = await attachMeta(briefings, options.currentUserId);
+  const withMeta = await attachMeta(briefings, options.currentUserId, agencyId);
   const sorted = sortBriefings(applyClientFilters(withMeta, filters));
 
   if (__DEV__) {
@@ -323,6 +336,7 @@ export async function getBriefing(options: {
   const [withMeta] = await attachMeta(
     [mapBriefing(data as Record<string, unknown>)],
     options.currentUserId,
+    agencyId,
   );
   return withMeta!;
 }
@@ -571,7 +585,10 @@ export async function getBriefingAcknowledgements(options: {
   }
 
   const rows = (data ?? []) as BriefingAcknowledgement[];
-  const authors = await fetchAuthorsByIds(rows.map((row) => row.user_id));
+  const authors = await fetchAuthorsByIds(
+    agencyId,
+    rows.map((row) => row.user_id),
+  );
   return rows.map((row) => ({
     ...row,
     profile: authors.get(row.user_id) ?? null,

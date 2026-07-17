@@ -1,7 +1,9 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppCard, AppText } from '@/components/common';
+import { PersonnelIdentity } from '@/components/personnel';
 import { colors, spacing } from '@/theme';
+import { isAgencyRole, type AgencyRole } from '@/types/agency';
 import {
   formatMessageAuthorName,
   formatMessageDateTime,
@@ -15,38 +17,46 @@ export type ConversationListItemProps = {
   onPress?: () => void;
 };
 
+function asAgencyRole(value: string | null | undefined): AgencyRole | null {
+  return value && isAgencyRole(value) ? value : null;
+}
+
 export function ConversationListItem({
   summary,
   selected,
   onPress,
 }: ConversationListItemProps) {
-  const subtitle = [summary.otherMember.role, summary.otherMember.unit, summary.otherMember.title]
-    .filter(Boolean)
-    .join(' · ');
+  const member = summary.otherMember;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open conversation with ${formatMessageAuthorName(summary.otherMember)}`}
+      accessibilityLabel={`Open conversation with ${formatMessageAuthorName(member)}`}
       accessibilityState={{ selected: !!selected }}
       onPress={onPress}
       style={({ pressed }) => [pressed ? styles.pressed : null]}>
       <AppCard raised={selected} style={[styles.card, selected ? styles.selected : null]}>
         <View style={styles.row}>
-          <AppText variant="title" style={styles.name}>
-            {formatMessageAuthorName(summary.otherMember)}
-          </AppText>
+          <PersonnelIdentity
+            agencyId={summary.conversation.agency_id}
+            userId={member.id}
+            displayName={member.display_name}
+            firstName={member.first_name}
+            lastName={member.last_name}
+            avatarPath={member.avatar_path}
+            rank={member.rank}
+            title={member.title}
+            unit={member.unit}
+            role={asAgencyRole(member.role)}
+            size="sm"
+            showMeta
+          />
           <AppText variant="caption" color="textSubtle">
             {summary.conversation.last_message_at
               ? formatMessageDateTime(summary.conversation.last_message_at)
               : formatMessageDateTime(summary.conversation.created_at)}
           </AppText>
         </View>
-        {subtitle ? (
-          <AppText variant="caption" color="textMuted" numberOfLines={1}>
-            {subtitle}
-          </AppText>
-        ) : null}
         <AppText variant="body" color="textMuted" numberOfLines={2}>
           {previewMessageBody(summary.lastMessage)}
         </AppText>
@@ -77,8 +87,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-  },
-  name: {
-    flex: 1,
   },
 });
