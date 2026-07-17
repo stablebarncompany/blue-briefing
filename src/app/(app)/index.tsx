@@ -14,6 +14,7 @@ import { PageContainer } from '@/components/layout';
 import {
   BRIEFINGS_CREATE_HREF,
   BRIEFINGS_HREF,
+  BRIEFINGS_START_OF_SHIFT_HREF,
   NOTIFICATIONS_HREF,
   briefingDetailHref,
 } from '@/constants/navigation';
@@ -116,26 +117,33 @@ export default function HomeScreen() {
 
       {!isLoading && currentAgency && summary ? (
         <>
-          {primaryShiftName ? (
-            <AppCard raised style={styles.shiftCard}>
-              <AppText variant="caption" color="textSubtle">
-                Your primary shift
-              </AppText>
-              <AppText variant="title">{primaryShiftName}</AppText>
-              <AppText variant="caption" color="textMuted">
-                Assignment only — not an on-duty clock status.
-              </AppText>
+          <AppCard raised style={styles.shiftCard}>
+            <AppText variant="caption" color="textSubtle">
+              Start of shift
+            </AppText>
+            <AppText variant="title">
+              {primaryShiftName ? primaryShiftName : 'Shift review'}
+            </AppText>
+            <AppText variant="caption" color="textMuted">
+              Review critical, pinned, unacknowledged, and shift briefings. Not attendance or
+              clock-in.
+            </AppText>
+            <AppButton
+              label="Start Shift Review"
+              onPress={() => router.push(BRIEFINGS_START_OF_SHIFT_HREF)}
+            />
+            {primaryShiftName ? (
               <AppButton
-                label={`Briefings for ${primaryShiftName}`}
+                label={`My shift briefings · ${primaryShiftName}`}
                 variant="ghost"
                 onPress={() =>
                   router.push(
-                    `${BRIEFINGS_HREF}?shift=${encodeURIComponent(primaryShiftName)}` as typeof BRIEFINGS_HREF,
+                    `${BRIEFINGS_HREF}?view=my_shift&shift=${encodeURIComponent(primaryShiftName)}` as typeof BRIEFINGS_HREF,
                   )
                 }
               />
-            </AppCard>
-          ) : null}
+            ) : null}
+          </AppCard>
 
           <View style={styles.statsRow}>
             <AppCard raised style={styles.statCard}>

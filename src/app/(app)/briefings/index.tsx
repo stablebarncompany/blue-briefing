@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Platform,
+  Pressable,
   RefreshControl,
   StyleSheet,
   View,
@@ -11,6 +14,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   BriefingCard,
   BriefingFiltersBar,
+  BriefingQuickViewsBar,
 } from '@/components/briefings';
 import {
   AppButton,
@@ -30,13 +34,15 @@ import { useAuth } from '@/hooks/use-auth';
 import { listBriefingCategories } from '@/services/briefing-categories';
 import {
   BriefingServiceError,
+  acknowledgeBriefing,
   listBriefings,
 } from '@/services/briefings';
-import { listAgencyShifts } from '@/services/shifts';
-import { colors, layout, spacing } from '@/theme';
+import { listAgencyShifts, listShiftAssignments } from '@/services/shifts';
+import { colors, layout, radius, spacing } from '@/theme';
 import {
   buildCategoryFilterOptions,
   canManageBriefingCatalog,
+  categoriesMatch,
   resolveCategoryFilterKey,
   type BriefingCategory,
 } from '@/types/briefingCategories';
@@ -47,25 +53,65 @@ import {
   type BriefingWithMeta,
 } from '@/types/briefings';
 import {
+  filtersForQuickView,
+  isBriefingQuickView,
+  selectCriticalAndPinned,
+  selectStartOfShiftBriefings,
+  supportsBulkAcknowledge,
+  visibleRequiredAcknowledgements,
+  type BriefingQuickView,
+} from '@/types/briefingQuickViews';
+import {
   buildShiftFilterOptions,
   resolveShiftFilterKey,
+  shiftsMatch,
   type AgencyShift,
 } from '@/types/shifts';
+
+function confirmAction(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (window.confirm(message)) {
+      onConfirm();
+    }
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Continue', onPress: onConfirm },
+  ]);
+}
 
 export default function BriefingsListScreen() {
   const { user } = useAuth();
   const { currentAgency, currentMembership, isLoading: agencyLoading } = useAgency();
-  const params = useLocalSearchParams<{ shift?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    shift?: string | string[];
+    view?: string | string[];
+  }>();
   const agencyId = currentAgency?.id ?? null;
   const userId = user?.id ?? null;
   const canManageCatalog = canManageBriefingCatalog(currentMembership?.role);
+
   const shiftParam =
     typeof params.shift === 'string' ? params.shift : params.shift?.[0] ?? '';
+  const viewParam = typeof params.view === 'string' ? params.view : params.view?.[0] ?? '';
 
+  const initialQuickView: BriefingQuickView = isBriefingQuickView(viewParam)
+    ? viewParam
+    : shiftParam
+      ? 'my_shift'
+      : 'all';
+
+  const [quickView, setQuickView] = useState<BriefingQuickView>(initialQuickView);
   const [filters, setFilters] = useState<BriefingFilters>(() =>
-    shiftParam
-      ? { ...DEFAULT_BRIEFING_FILTERS, shift: shiftParam }
-      : DEFAULT_BRIEFING_FILTERS,
+    filtersForQuickView(initialQuickView, {
+      myShiftName: shiftParam || null,
+      preserved: {},
+    }),
+  );
+  const [primaryShiftName, setPrimaryShiftName] = useState<string | null>(null);
+  const [temporaryShiftName, setTemporaryShiftName] = useState<string | null>(
+    shiftParam || null,
   );
   const [items, setItems] = useState<BriefingWithMeta[]>([]);
   const [optionSource, setOptionSource] = useState<BriefingWithMeta[]>([]);
@@ -74,10 +120,57 @@ export default function BriefingsListScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [ackMessage, setAckMessage] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const hasLoadedOnceRef = useRef(false);
 
+  const effectiveShiftName = primaryShiftName ?? temporaryShiftName;
+  const needsTemporaryShift =
+    (quickView === 'my_shift' || quickView === 'start_of_shift') && !primaryShiftName;
   const filtersActive = hasActiveBriefingFilters(filters);
+  const quickViewActive = quickView !== 'all';
+
+  const listFilters = useMemo((): BriefingFilters => {
+    if (quickView === 'all') {
+      return filters;
+    }
+    const base = filtersForQuickView(quickView, {
+      myShiftName: effectiveShiftName,
+      preserved: {
+        search: filters.search,
+        category: filters.category,
+      },
+    });
+    // Keep user-adjusted detailed filters that do not fight the quick view.
+    if (quickView === 'my_shift') {
+      return {
+        ...base,
+        shift: effectiveShiftName ?? 'all',
+        priority: filters.priority,
+        category: filters.category,
+        search: filters.search,
+      };
+    }
+    if (quickView === 'required_review') {
+      return {
+        ...base,
+        priority: filters.priority,
+        shift: filters.shift,
+        category: filters.category,
+        search: filters.search,
+      };
+    }
+    return {
+      ...base,
+      priority: filters.priority,
+      shift: filters.shift,
+      category: filters.category,
+      search: filters.search,
+      pinnedOnly: filters.pinnedOnly,
+      acknowledgement: filters.acknowledgement,
+    };
+  }, [effectiveShiftName, filters, quickView]);
 
   const load = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
@@ -91,12 +184,6 @@ export default function BriefingsListScreen() {
         setIsLoading(false);
         setHasLoadedOnce(true);
         hasLoadedOnceRef.current = true;
-        if (__DEV__) {
-          console.log('[briefings] skip list load — agency or user unavailable', {
-            agencyIdPresent: !!agencyId,
-            userIdPresent: !!userId,
-          });
-        }
         return;
       }
 
@@ -107,30 +194,84 @@ export default function BriefingsListScreen() {
       }
       setErrorMessage(null);
 
-      if (__DEV__) {
-        console.log('[briefings] loading list', {
-          agencyIdPresent: true,
-          filters: {
-            search: filters.search?.trim() ? '[set]' : '',
-            priority: filters.priority ?? 'all',
-            status: filters.status ?? 'all',
-            shift: filters.shift ?? 'all',
-            category: filters.category ?? 'all',
-            pinnedOnly: !!filters.pinnedOnly,
-            acknowledgement: filters.acknowledgement ?? 'all',
-          },
-        });
-      }
-
       try {
+        if (
+          (quickView === 'my_shift' || quickView === 'start_of_shift') &&
+          !effectiveShiftName &&
+          quickView === 'my_shift'
+        ) {
+          // My Shift with no selection: load options but keep the list empty.
+          const allRows = await listBriefings({
+            agencyId,
+            currentUserId: userId,
+            filters: DEFAULT_BRIEFING_FILTERS,
+          });
+          setOptionSource(allRows);
+          setItems([]);
+          return;
+        }
+
+        const queryFilters: BriefingFilters =
+          quickView === 'critical_pinned' || quickView === 'start_of_shift'
+            ? {
+                ...listFilters,
+                // Fetch active set; OR-selection happens client-side.
+                priority: 'all',
+                shift: 'all',
+                pinnedOnly: false,
+                acknowledgement: 'all',
+              }
+            : listFilters;
+
         const filteredRows = await listBriefings({
           agencyId,
           currentUserId: userId,
-          filters,
+          filters: queryFilters,
         });
-        setItems(filteredRows);
 
-        if (hasActiveBriefingFilters(filters)) {
+        let nextItems = filteredRows;
+        if (quickView === 'critical_pinned') {
+          nextItems = selectCriticalAndPinned(filteredRows);
+        } else if (quickView === 'start_of_shift') {
+          nextItems = selectStartOfShiftBriefings(filteredRows, effectiveShiftName);
+        }
+
+        // Re-apply search/category/priority when the quick view used a broader fetch.
+        if (quickView === 'critical_pinned' || quickView === 'start_of_shift') {
+          const search = listFilters.search?.trim().toLowerCase() ?? '';
+          const category = listFilters.category ?? 'all';
+          const priority = listFilters.priority ?? 'all';
+          nextItems = nextItems.filter((item) => {
+            if (priority !== 'all' && item.priority !== priority) {
+              return false;
+            }
+            if (category !== 'all' && !categoriesMatch(item.category, category)) {
+              return false;
+            }
+            if (search) {
+              const haystack = [
+                item.title,
+                item.body,
+                item.shift_name,
+                item.category,
+                item.case_number,
+                item.location,
+                ...(item.tags ?? []),
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+              if (!haystack.includes(search)) {
+                return false;
+              }
+            }
+            return true;
+          });
+        }
+
+        setItems(nextItems);
+
+        if (hasActiveBriefingFilters(listFilters) || quickViewActive) {
           const allRows = await listBriefings({
             agencyId,
             currentUserId: userId,
@@ -145,9 +286,6 @@ export default function BriefingsListScreen() {
           error instanceof BriefingServiceError
             ? error.message
             : 'Unable to load briefings.';
-        if (__DEV__) {
-          console.warn('[briefings] list load failed', { message });
-        }
         setErrorMessage(message);
         if (!hasLoadedOnceRef.current) {
           setItems([]);
@@ -159,7 +297,15 @@ export default function BriefingsListScreen() {
         setIsRefreshing(false);
       }
     },
-    [agencyId, agencyLoading, filters, userId],
+    [
+      agencyId,
+      agencyLoading,
+      effectiveShiftName,
+      listFilters,
+      quickView,
+      quickViewActive,
+      userId,
+    ],
   );
 
   useFocusEffect(
@@ -168,7 +314,7 @@ export default function BriefingsListScreen() {
       queueMicrotask(() => {
         if (!cancelled) {
           void load(hasLoadedOnceRef.current ? 'refresh' : 'initial');
-          if (agencyId) {
+          if (agencyId && userId) {
             void Promise.all([
               listAgencyShifts({ agencyId, includeInactive: false }).catch(
                 () => [] as AgencyShift[],
@@ -176,22 +322,33 @@ export default function BriefingsListScreen() {
               listBriefingCategories({ agencyId, includeInactive: false }).catch(
                 () => [] as BriefingCategory[],
               ),
-            ]).then(([shifts, categories]) => {
-              if (!cancelled) {
-                setAgencyShifts(shifts);
-                setAgencyCategories(categories);
+              listShiftAssignments({ agencyId, userId, activeOnly: true }).catch(() => []),
+            ]).then(([shifts, categories, assignments]) => {
+              if (cancelled) {
+                return;
+              }
+              setAgencyShifts(shifts);
+              setAgencyCategories(categories);
+              const primary = assignments.find((row) => row.assignment_type === 'primary');
+              const primaryName = primary?.shift_name?.trim() || null;
+              setPrimaryShiftName(primaryName);
+              if (primaryName) {
+                setTemporaryShiftName((current) => current ?? primaryName);
+              } else if (shiftParam) {
+                setTemporaryShiftName((current) => current ?? shiftParam);
               }
             });
           } else {
             setAgencyShifts([]);
             setAgencyCategories([]);
+            setPrimaryShiftName(null);
           }
         }
       });
       return () => {
         cancelled = true;
       };
-    }, [agencyId, load]),
+    }, [agencyId, load, shiftParam, userId]),
   );
 
   const shiftFilterOptions = useMemo(
@@ -208,7 +365,6 @@ export default function BriefingsListScreen() {
     [shiftFilterOptions],
   );
 
-  // Keep URL/query/filter selection matched to a canonical label when possible.
   const normalizedShiftFilter = useMemo(() => {
     const key = resolveShiftFilterKey(filters.shift, shiftFilterOptions);
     if (key === 'all') {
@@ -243,6 +399,83 @@ export default function BriefingsListScreen() {
     );
   }, [categoryFilterOptions, filters.category]);
 
+  const requiredVisible = useMemo(() => visibleRequiredAcknowledgements(items), [items]);
+
+  function onSelectQuickView(view: BriefingQuickView) {
+    setAckMessage(null);
+    setQuickView(view);
+    setFilters(
+      filtersForQuickView(view, {
+        myShiftName: effectiveShiftName,
+        preserved: {
+          search: '',
+          category: 'all',
+        },
+      }),
+    );
+  }
+
+  function clearQuickView() {
+    onSelectQuickView('all');
+  }
+
+  function clearFilters() {
+    setFilters(
+      filtersForQuickView(quickView, {
+        myShiftName: effectiveShiftName,
+        preserved: {},
+      }),
+    );
+  }
+
+  function onBulkAcknowledge() {
+    if (!agencyId || !userId || bulkBusy) {
+      return;
+    }
+    const targets = visibleRequiredAcknowledgements(items);
+    if (targets.length === 0) {
+      setAckMessage('No visible required briefings need acknowledgement.');
+      return;
+    }
+
+    confirmAction(
+      'Acknowledge briefings',
+      `Acknowledge ${targets.length} visible required briefing${targets.length === 1 ? '' : 's'} as you? This only covers items currently loaded in this view.`,
+      () => {
+        void (async () => {
+          setBulkBusy(true);
+          setAckMessage(null);
+          setErrorMessage(null);
+          let succeeded = 0;
+          let failed = 0;
+          for (const briefing of targets) {
+            try {
+              await acknowledgeBriefing({
+                agencyId,
+                briefingId: briefing.id,
+                userId,
+              });
+              succeeded += 1;
+            } catch {
+              failed += 1;
+            }
+          }
+          await load('refresh');
+          if (failed > 0) {
+            setErrorMessage(
+              `Acknowledged ${succeeded}; ${failed} could not be saved. Hidden or failed items were not marked.`,
+            );
+          } else {
+            setAckMessage(
+              `Acknowledged ${succeeded} briefing${succeeded === 1 ? '' : 's'} for you.`,
+            );
+          }
+          setBulkBusy(false);
+        })();
+      },
+    );
+  }
+
   const showAgencyLoading = agencyLoading || (!currentAgency && !hasLoadedOnce && !errorMessage);
 
   if (showAgencyLoading) {
@@ -274,7 +507,7 @@ export default function BriefingsListScreen() {
       <View style={styles.headingBlock}>
         <AppText variant="display">Briefings</AppText>
         <AppText variant="body" color="textMuted">
-          Searchable, acknowledged pass-ons for every watch.
+          Searchable archive and start-of-shift review in one place.
         </AppText>
       </View>
 
@@ -300,6 +533,85 @@ export default function BriefingsListScreen() {
         ) : null}
       </View>
 
+      <BriefingQuickViewsBar value={quickView} onChange={onSelectQuickView} />
+
+      {quickView === 'start_of_shift' ? (
+        <View style={styles.banner}>
+          <AppText variant="label" color="text">
+            Start-of-Shift View
+          </AppText>
+          <AppText variant="body" color="textMuted">
+            This view gathers the briefings most relevant at the start of your shift.
+          </AppText>
+          <AppButton
+            label="Exit Start-of-Shift View"
+            variant="ghost"
+            onPress={clearQuickView}
+            style={styles.clearButton}
+          />
+        </View>
+      ) : null}
+
+      {quickView === 'my_shift' || quickView === 'start_of_shift' ? (
+        <View style={styles.shiftContext}>
+          <AppText variant="label" color="textSubtle">
+            Shift focus
+          </AppText>
+          {primaryShiftName ? (
+            <AppText variant="body" color="textMuted">
+              Primary assignment: {primaryShiftName}
+            </AppText>
+          ) : (
+            <AppText variant="body" color="textMuted">
+              No primary shift assigned. Choose a temporary shift for this review only — it does
+              not change your assignment.
+            </AppText>
+          )}
+          {needsTemporaryShift || !primaryShiftName ? (
+            <View style={styles.tempShiftRow}>
+              {shiftOptions.map((shift) => {
+                const selected = !!effectiveShiftName && shiftsMatch(effectiveShiftName, shift);
+                return (
+                  <Pressable
+                    key={shift}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => {
+                      setTemporaryShiftName(shift);
+                      if (quickView === 'my_shift') {
+                        setFilters((current) => ({ ...current, shift, status: 'active' }));
+                      }
+                    }}
+                    style={[styles.tempChip, selected ? styles.tempChipSelected : null]}>
+                    <AppText variant="caption" color={selected ? 'text' : 'textMuted'}>
+                      {shift}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+          {effectiveShiftName ? (
+            <AppText variant="caption" color="primary">
+              Showing: {effectiveShiftName}
+              {!primaryShiftName ? ' (temporary)' : ''}
+            </AppText>
+          ) : null}
+        </View>
+      ) : null}
+
+      {supportsBulkAcknowledge(quickView) ? (
+        <AppButton
+          label={`Acknowledge visible required briefings${
+            requiredVisible.length > 0 ? ` (${requiredVisible.length})` : ''
+          }`}
+          variant="secondary"
+          loading={bulkBusy}
+          disabled={bulkBusy || requiredVisible.length === 0}
+          onPress={onBulkAcknowledge}
+        />
+      ) : null}
+
       <BriefingFiltersBar
         filters={{
           ...filters,
@@ -321,25 +633,37 @@ export default function BriefingsListScreen() {
               ? 'all'
               : (categoryFilterOptions.find((option) => option.key === categoryKey)?.label ??
                 next.category);
-          setFilters({ ...next, shift: shiftLabel, category: categoryLabel });
+          setFilters({
+            ...next,
+            shift: shiftLabel ?? 'all',
+            category: categoryLabel ?? 'all',
+          });
+          if (quickView === 'my_shift' && shiftLabel && shiftLabel !== 'all') {
+            setTemporaryShiftName(shiftLabel);
+          }
         }}
       />
 
-      {filtersActive ? (
-        <AppButton
-          label="Clear filters"
-          variant="ghost"
-          onPress={() => setFilters(DEFAULT_BRIEFING_FILTERS)}
-          style={styles.clearButton}
-        />
-      ) : null}
+      <View style={styles.clearRow}>
+        {quickViewActive && quickView !== 'start_of_shift' ? (
+          <AppButton
+            label="Clear quick view"
+            variant="ghost"
+            onPress={clearQuickView}
+            style={styles.clearButton}
+          />
+        ) : null}
+        {filtersActive ? (
+          <AppButton
+            label="Clear filters"
+            variant="ghost"
+            onPress={clearFilters}
+            style={styles.clearButton}
+          />
+        ) : null}
+      </View>
 
-      {__DEV__ && hasLoadedOnce && !errorMessage ? (
-        <AppText variant="caption" color="textSubtle">
-          {items.length} briefing{items.length === 1 ? '' : 's'}
-        </AppText>
-      ) : null}
-
+      {ackMessage ? <InlineFormMessage message={ackMessage} tone="info" /> : null}
       {errorMessage ? <InlineFormMessage message={errorMessage} /> : null}
 
       {isLoading && !isRefreshing ? (
@@ -352,6 +676,15 @@ export default function BriefingsListScreen() {
       ) : null}
     </View>
   );
+
+  const emptyDescription =
+    quickView === 'my_shift' && !effectiveShiftName
+      ? 'Select a temporary shift above to review active briefings for that watch.'
+      : quickView === 'start_of_shift'
+        ? 'No critical, pinned, unacknowledged, shift, or department-wide briefings match right now.'
+        : quickView === 'required_review'
+          ? 'You have no active briefings awaiting your acknowledgement.'
+          : 'Create a pass-on or adjust filters to see agency briefings.';
 
   return (
     <PageContainer scroll={false} contentStyle={styles.page}>
@@ -370,10 +703,7 @@ export default function BriefingsListScreen() {
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           isLoading || errorMessage ? null : (
-            <EmptyState
-              title="No briefings yet"
-              description="Create a pass-on or adjust filters to see agency briefings."
-            />
+            <EmptyState title="No briefings in this view" description={emptyDescription} />
           )
         }
         renderItem={({ item }) => (
@@ -422,6 +752,39 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     alignSelf: 'flex-start',
+  },
+  clearRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  banner: {
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  shiftContext: {
+    gap: spacing.sm,
+  },
+  tempShiftRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  tempChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  tempChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   cardWrap: {
     marginBottom: spacing.md,

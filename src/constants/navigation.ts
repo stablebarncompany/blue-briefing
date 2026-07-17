@@ -46,6 +46,7 @@ export const BRIEFINGS_HREF = '/briefings' as Href;
 export const BRIEFINGS_CREATE_HREF = '/briefings/create' as Href;
 export const BRIEFINGS_CATEGORIES_HREF = '/briefings/categories' as Href;
 export const BRIEFINGS_TEMPLATES_HREF = '/briefings/templates' as Href;
+export const BRIEFINGS_START_OF_SHIFT_HREF = '/briefings?view=start_of_shift' as Href;
 export const GROUPS_HREF = '/groups' as Href;
 export const GROUPS_CREATE_HREF = '/groups/create' as Href;
 export const MESSAGES_HREF = '/messages' as Href;
