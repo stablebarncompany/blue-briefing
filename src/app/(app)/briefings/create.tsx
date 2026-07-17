@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 
 import {
   BriefingFormFields,
   EMPTY_BRIEFING_FORM,
   PendingAttachmentsPanel,
+  TemplateSelect,
   briefingFormToInput,
   type BriefingFormValues,
 } from '@/components/briefings';
@@ -25,23 +26,63 @@ import {
   pickBriefingImages,
   uploadBriefingAttachment,
 } from '@/services/briefing-attachments';
+import { listBriefingCategories } from '@/services/briefing-categories';
 import {
   BriefingServiceError,
   createBriefing,
   validateCreateBriefingInput,
 } from '@/services/briefings';
+import { listBriefingTemplates } from '@/services/briefing-templates';
 import { listAgencyShifts } from '@/services/shifts';
 import { spacing } from '@/theme';
 import {
   ATTACHMENT_MAX_PER_BRIEFING,
   type PendingAttachment,
 } from '@/types/briefing-attachments';
+import type { BriefingCategory } from '@/types/briefingCategories';
+import type { BriefingTemplate } from '@/types/briefingTemplates';
 import type { AgencyShift } from '@/types/shifts';
+
+function formHasContent(values: BriefingFormValues): boolean {
+  return Boolean(
+    values.title.trim() ||
+      values.body.trim() ||
+      values.category.trim() ||
+      values.case_number.trim() ||
+      values.location.trim() ||
+      values.tagsText.trim() ||
+      values.priority !== EMPTY_BRIEFING_FORM.priority ||
+      values.requires_acknowledgement !== EMPTY_BRIEFING_FORM.requires_acknowledgement,
+  );
+}
+
+function applyTemplate(
+  values: BriefingFormValues,
+  template: BriefingTemplate,
+  categories: BriefingCategory[],
+): BriefingFormValues {
+  const categoryName =
+    template.category_name ??
+    categories.find((category) => category.id === template.category_id)?.name ??
+    values.category;
+
+  return {
+    ...values,
+    title: template.title_template ?? '',
+    body: template.body_template,
+    category: categoryName ?? '',
+    priority: template.default_priority,
+    requires_acknowledgement: template.requires_acknowledgement,
+  };
+}
 
 export default function CreateBriefingScreen() {
   const { user } = useAuth();
   const { currentAgency } = useAgency();
   const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
+  const [agencyCategories, setAgencyCategories] = useState<BriefingCategory[]>([]);
+  const [templates, setTemplates] = useState<BriefingTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [values, setValues] = useState<BriefingFormValues>(EMPTY_BRIEFING_FORM);
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof BriefingFormValues, string>>
@@ -60,25 +101,63 @@ export default function CreateBriefingScreen() {
       if (!agencyId) {
         if (!cancelled) {
           setAgencyShifts([]);
+          setAgencyCategories([]);
+          setTemplates([]);
         }
         return;
       }
-      void listAgencyShifts({ agencyId, includeInactive: false })
-        .then((rows) => {
-          if (!cancelled) {
-            setAgencyShifts(rows);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setAgencyShifts([]);
-          }
-        });
+      void Promise.all([
+        listAgencyShifts({ agencyId, includeInactive: false }).catch(() => [] as AgencyShift[]),
+        listBriefingCategories({ agencyId, includeInactive: false }).catch(
+          () => [] as BriefingCategory[],
+        ),
+        listBriefingTemplates({ agencyId, includeInactive: false }).catch(
+          () => [] as BriefingTemplate[],
+        ),
+      ]).then(([shifts, categories, templateRows]) => {
+        if (!cancelled) {
+          setAgencyShifts(shifts);
+          setAgencyCategories(categories);
+          setTemplates(templateRows);
+        }
+      });
     });
     return () => {
       cancelled = true;
     };
   }, [currentAgency?.id]);
+
+  function confirmAndApplyTemplate(template: BriefingTemplate | null) {
+    if (!template) {
+      setSelectedTemplateId(null);
+      return;
+    }
+
+    const apply = () => {
+      setSelectedTemplateId(template.id);
+      setValues((current) => applyTemplate(current, template, agencyCategories));
+    };
+
+    if (!formHasContent(values) || selectedTemplateId === template.id) {
+      apply();
+      return;
+    }
+
+    const message =
+      'Applying this template will overwrite the current title, body, category, priority, and acknowledgement settings. Continue?';
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(message)) {
+        apply();
+      }
+      return;
+    }
+
+    Alert.alert('Replace form content?', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Apply template', style: 'destructive', onPress: apply },
+    ]);
+  }
 
   async function onAddPhotos() {
     if (submitting || !currentAgency) {
@@ -125,7 +204,7 @@ export default function CreateBriefingScreen() {
       return;
     }
 
-    const input = briefingFormToInput(values, agencyShifts);
+    const input = briefingFormToInput(values, agencyShifts, agencyCategories);
     const validationError = validateCreateBriefingInput(input);
     if (!createdBriefingId && validationError) {
       const nextErrors: Partial<Record<keyof BriefingFormValues, string>> = {};
@@ -231,12 +310,20 @@ export default function CreateBriefingScreen() {
         </AppText>
       </View>
 
+      <TemplateSelect
+        templates={templates}
+        selectedId={selectedTemplateId}
+        disabled={submitting || !!createdBriefingId}
+        onSelect={(template) => confirmAndApplyTemplate(template)}
+      />
+
       <BriefingFormFields
         values={values}
         onChange={setValues}
         fieldErrors={fieldErrors}
         disabled={submitting || !!createdBriefingId}
         agencyShifts={agencyShifts}
+        agencyCategories={agencyCategories}
       />
 
       <PendingAttachmentsPanel

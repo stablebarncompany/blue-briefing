@@ -2,7 +2,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppCard, AppText } from '@/components/common';
 import { BriefingPriorityBadge } from '@/components/briefings/BriefingPriorityBadge';
+import { CategoryAccent } from '@/components/briefings/CategoryAccent';
 import { colors, spacing } from '@/theme';
+import type { BriefingCategory } from '@/types/briefingCategories';
 import {
   formatAuthorAssignment,
   formatAuthorName,
@@ -14,9 +16,10 @@ import {
 export type BriefingCardProps = {
   briefing: BriefingWithMeta;
   onPress?: () => void;
+  categories?: BriefingCategory[];
 };
 
-export function BriefingCard({ briefing, onPress }: BriefingCardProps) {
+export function BriefingCard({ briefing, onPress, categories = [] }: BriefingCardProps) {
   const isCritical = briefing.priority === 'critical' && briefing.status === 'active';
 
   return (
@@ -53,14 +56,16 @@ export function BriefingCard({ briefing, onPress }: BriefingCardProps) {
         </View>
 
         <AppText variant="caption" color="textMuted">
-          {[
-            formatAuthorName(briefing.author),
-            formatAuthorAssignment(briefing.author),
-            briefing.category,
-          ]
+          {[formatAuthorName(briefing.author), formatAuthorAssignment(briefing.author)]
             .filter(Boolean)
             .join(' · ')}
         </AppText>
+
+        <CategoryAccent
+          categoryName={briefing.category}
+          catalog={categories}
+          compact
+        />
 
         <AppText variant="body" color="textMuted" numberOfLines={3}>
           {previewBriefingBody(briefing.body)}

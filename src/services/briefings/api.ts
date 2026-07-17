@@ -22,6 +22,10 @@ import {
   isBriefingPriority,
   isBriefingStatus,
 } from '@/types/briefings';
+import {
+  categoriesMatch,
+  formatCategoryNameForStorage,
+} from '@/types/briefingCategories';
 import { formatShiftNameForStorage, shiftsMatch } from '@/types/shifts';
 
 export class BriefingServiceError extends Error {
@@ -139,7 +143,7 @@ function applyClientFilters(items: BriefingWithMeta[], filters: BriefingFilters)
       }
     }
     if (category !== 'all') {
-      if ((item.category ?? '').toLowerCase() !== category.toLowerCase()) {
+      if (!categoriesMatch(item.category, category)) {
         return false;
       }
     }
@@ -359,7 +363,7 @@ export async function createBriefing(options: {
     title: options.input.title.trim(),
     body: options.input.body.trim(),
     shift_name: formatShiftNameForStorage(options.input.shift_name),
-    category: options.input.category?.trim() || null,
+    category: formatCategoryNameForStorage(options.input.category),
     priority: options.input.priority ?? 'medium',
     case_number: options.input.case_number?.trim() || null,
     location: options.input.location?.trim() || null,
@@ -410,7 +414,7 @@ export async function updateBriefing(options: {
     patch.shift_name = shift;
   }
   if (options.input.category !== undefined) {
-    const category = options.input.category?.trim() || null;
+    const category = formatCategoryNameForStorage(options.input.category);
     if (category && category.length > CATEGORY_MAX_LENGTH) {
       throw new BriefingServiceError(`Category must be ${CATEGORY_MAX_LENGTH} characters or fewer.`);
     }

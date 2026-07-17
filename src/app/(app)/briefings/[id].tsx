@@ -6,7 +6,10 @@ import {
   BriefingAttachmentsSection,
   BriefingFormFields,
   BriefingPriorityBadge,
+  CategoryAccent,
   briefingFormToInput,
+  canPrintBriefing,
+  printBriefing,
   type BriefingFormValues,
 } from '@/components/briefings';
 import {
@@ -19,6 +22,11 @@ import {
 import { PageContainer } from '@/components/layout';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  BriefingAttachmentServiceError,
+  listBriefingAttachments,
+} from '@/services/briefing-attachments';
+import { listBriefingCategories } from '@/services/briefing-categories';
 import {
   BriefingServiceError,
   acknowledgeBriefing,
@@ -33,6 +41,7 @@ import {
 } from '@/services/briefings';
 import { listAgencyShifts } from '@/services/shifts';
 import { colors, spacing } from '@/theme';
+import type { BriefingCategory } from '@/types/briefingCategories';
 import {
   canEditBriefing,
   canSuperviseBriefings,
@@ -75,6 +84,7 @@ export default function BriefingDetailScreen() {
   const [editValues, setEditValues] = useState<BriefingFormValues | null>(null);
   const [attachmentsRefreshKey, setAttachmentsRefreshKey] = useState(0);
   const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
+  const [agencyCategories, setAgencyCategories] = useState<BriefingCategory[]>([]);
 
   const role = currentMembership?.role;
   const canSupervise = canSuperviseBriefings(role);
@@ -133,20 +143,21 @@ export default function BriefingDetailScreen() {
       if (!agencyId) {
         if (!cancelled) {
           setAgencyShifts([]);
+          setAgencyCategories([]);
         }
         return;
       }
-      void listAgencyShifts({ agencyId, includeInactive: false })
-        .then((rows) => {
-          if (!cancelled) {
-            setAgencyShifts(rows);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setAgencyShifts([]);
-          }
-        });
+      void Promise.all([
+        listAgencyShifts({ agencyId, includeInactive: false }).catch(() => [] as AgencyShift[]),
+        listBriefingCategories({ agencyId, includeInactive: false }).catch(
+          () => [] as BriefingCategory[],
+        ),
+      ]).then(([shifts, categories]) => {
+        if (!cancelled) {
+          setAgencyShifts(shifts);
+          setAgencyCategories(categories);
+        }
+      });
     });
     return () => {
       cancelled = true;
@@ -198,7 +209,7 @@ export default function BriefingDetailScreen() {
     if (!agencyId || !briefing || !editValues) {
       return;
     }
-    const input = briefingFormToInput(editValues, agencyShifts);
+    const input = briefingFormToInput(editValues, agencyShifts, agencyCategories);
     const validationError = validateCreateBriefingInput(input);
     if (validationError) {
       setActionError(validationError);
@@ -214,9 +225,27 @@ export default function BriefingDetailScreen() {
     });
   }
 
-  function onPrint() {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.print();
+  async function onPrint() {
+    if (!agencyId || !briefing || !canPrintBriefing()) {
+      setActionError('Printing is available on web in this MVP.');
+      return;
+    }
+    try {
+      const attachments = await listBriefingAttachments({
+        agencyId,
+        briefingId: briefing.id,
+      });
+      printBriefing({
+        agencyName: currentAgency?.name ?? 'Agency',
+        briefing,
+        attachments,
+      });
+    } catch (error) {
+      setActionError(
+        error instanceof BriefingAttachmentServiceError || error instanceof Error
+          ? error.message
+          : 'Unable to print briefing.',
+      );
     }
   }
 
@@ -283,6 +312,7 @@ export default function BriefingDetailScreen() {
             onChange={setEditValues}
             disabled={busyAction === 'save'}
             agencyShifts={agencyShifts}
+            agencyCategories={agencyCategories}
           />
           <View style={styles.actionRow}>
             <AppButton
@@ -304,11 +334,12 @@ export default function BriefingDetailScreen() {
         </AppCard>
       ) : (
         <AppCard raised style={styles.section}>
-          {briefing.shift_name || briefing.category ? (
+          {briefing.shift_name ? (
             <AppText variant="caption" color="textMuted">
-              {[briefing.shift_name, briefing.category].filter(Boolean).join(' · ')}
+              Shift: {briefing.shift_name}
             </AppText>
           ) : null}
+          <CategoryAccent categoryName={briefing.category} catalog={agencyCategories} />
           <AppText variant="body">{briefing.body}</AppText>
           {briefing.case_number || briefing.location ? (
             <AppText variant="caption" color="textSubtle">
@@ -441,7 +472,7 @@ export default function BriefingDetailScreen() {
         ) : null}
 
         {Platform.OS === 'web' ? (
-          <AppButton label="Print" variant="ghost" onPress={onPrint} />
+          <AppButton label="Print" variant="ghost" onPress={() => void onPrint()} />
         ) : null}
       </View>
     </PageContainer>

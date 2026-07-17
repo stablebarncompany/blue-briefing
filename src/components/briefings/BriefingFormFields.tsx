@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText, FormField } from '@/components/common';
+import { CategorySelect } from '@/components/briefings/CategorySelect';
 import { ShiftSelect } from '@/components/shifts';
 import { colors, radius, spacing } from '@/theme';
 import {
@@ -15,6 +16,11 @@ import {
   type BriefingPriority,
   type CreateBriefingInput,
 } from '@/types/briefings';
+import {
+  categoriesMatch,
+  formatCategoryNameForStorage,
+  type BriefingCategory,
+} from '@/types/briefingCategories';
 import {
   formatShiftNameForStorage,
   shiftsMatch,
@@ -48,18 +54,27 @@ export const EMPTY_BRIEFING_FORM: BriefingFormValues = {
 export function briefingFormToInput(
   values: BriefingFormValues,
   agencyShifts: AgencyShift[] = [],
+  agencyCategories: BriefingCategory[] = [],
 ): CreateBriefingInput {
   const rawShift = values.shift_name.trim();
-  const catalogMatch = agencyShifts.find((shift) => shiftsMatch(shift.name, rawShift));
-  const shift_name = catalogMatch
-    ? catalogMatch.name.trim().replace(/\s+/g, ' ')
+  const shiftMatch = agencyShifts.find((shift) => shiftsMatch(shift.name, rawShift));
+  const shift_name = shiftMatch
+    ? shiftMatch.name.trim().replace(/\s+/g, ' ')
     : formatShiftNameForStorage(rawShift);
+
+  const rawCategory = values.category.trim();
+  const categoryMatch = agencyCategories.find((category) =>
+    categoriesMatch(category.name, rawCategory),
+  );
+  const category = categoryMatch
+    ? categoryMatch.name.trim().replace(/\s+/g, ' ')
+    : formatCategoryNameForStorage(rawCategory);
 
   return {
     title: values.title,
     body: values.body,
     shift_name,
-    category: values.category,
+    category,
     priority: values.priority,
     case_number: values.case_number,
     location: values.location,
@@ -77,6 +92,7 @@ export type BriefingFormFieldsProps = {
   fieldErrors?: Partial<Record<keyof BriefingFormValues, string>>;
   disabled?: boolean;
   agencyShifts?: AgencyShift[];
+  agencyCategories?: BriefingCategory[];
 };
 
 export function BriefingFormFields({
@@ -85,6 +101,7 @@ export function BriefingFormFields({
   fieldErrors,
   disabled,
   agencyShifts = [],
+  agencyCategories = [],
 }: BriefingFormFieldsProps) {
   function setField<K extends keyof BriefingFormValues>(key: K, value: BriefingFormValues[K]) {
     onChange({ ...values, [key]: value });
@@ -207,16 +224,57 @@ export function BriefingFormFields({
         </View>
       </View>
 
-      <FormField
-        label="Category"
-        value={values.category}
-        onChangeText={(category) => setField('category', category)}
-        placeholder="Patrol, Investigations, …"
-        autoCapitalize="words"
-        maxLength={CATEGORY_MAX_LENGTH}
-        editable={!disabled}
-        error={fieldErrors?.category}
-      />
+      {agencyCategories.length > 0 ? (
+        <CategorySelect
+          label="Category"
+          agencyCategories={agencyCategories}
+          value={
+            agencyCategories.find((category) => categoriesMatch(category.name, values.category))
+              ?.id ?? (values.category ? 'custom' : '')
+          }
+          customValue={
+            agencyCategories.some((category) => categoriesMatch(category.name, values.category))
+              ? ''
+              : values.category
+          }
+          allowNone
+          allowCustom
+          disabled={disabled}
+          error={fieldErrors?.category}
+          onChange={(next) => {
+            if (next.mode === 'none') {
+              setField('category', '');
+              return;
+            }
+            if (next.mode === 'category' && next.categoryId) {
+              const catalog = agencyCategories.find((category) => category.id === next.categoryId);
+              setField(
+                'category',
+                (catalog?.name ?? next.name)
+                  .trim()
+                  .replace(/\s+/g, ' ')
+                  .slice(0, CATEGORY_MAX_LENGTH),
+              );
+              return;
+            }
+            setField(
+              'category',
+              (formatCategoryNameForStorage(next.name) ?? '').slice(0, CATEGORY_MAX_LENGTH),
+            );
+          }}
+        />
+      ) : (
+        <FormField
+          label="Category"
+          value={values.category}
+          onChangeText={(category) => setField('category', category)}
+          placeholder="Patrol, Investigations, …"
+          autoCapitalize="words"
+          maxLength={CATEGORY_MAX_LENGTH}
+          editable={!disabled}
+          error={fieldErrors?.category}
+        />
+      )}
 
       <FormField
         label="Case number (optional)"

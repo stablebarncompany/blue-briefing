@@ -8,4 +8,8 @@ export {
   type BriefingFormValues,
 } from './BriefingFormFields';
 export { BriefingPriorityBadge } from './BriefingPriorityBadge';
+export { CategoryAccent } from './CategoryAccent';
+export { CategorySelect } from './CategorySelect';
 export { PendingAttachmentsPanel } from './PendingAttachmentsPanel';
+export { TemplateSelect } from './TemplateSelect';
+export { canPrintBriefing, printBriefing } from './printBriefing';

@@ -138,17 +138,15 @@ export function BriefingFiltersBar({
         ]}
       />
 
-      {categoryOptions.length > 0 ? (
-        <ChipRow
-          label="Category"
-          value={categoryValue}
-          onSelect={(category) => onChange({ ...filters, category })}
-          options={[
-            { value: 'all', label: 'All' },
-            ...categoryOptions.map((category) => ({ value: category, label: category })),
-          ]}
-        />
-      ) : null}
+      <ChipRow
+        label="Category"
+        value={categoryValue}
+        onSelect={(category) => onChange({ ...filters, category })}
+        options={[
+          { value: 'all', label: 'All' },
+          ...categoryOptions.map((category) => ({ value: category, label: category })),
+        ]}
+      />
 
       <ChipRow
         label="Pinned"

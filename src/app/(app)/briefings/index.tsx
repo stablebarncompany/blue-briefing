@@ -19,15 +19,27 @@ import {
   InlineFormMessage,
 } from '@/components/common';
 import { PageContainer } from '@/components/layout';
-import { BRIEFINGS_CREATE_HREF, briefingDetailHref } from '@/constants/navigation';
+import {
+  BRIEFINGS_CATEGORIES_HREF,
+  BRIEFINGS_CREATE_HREF,
+  BRIEFINGS_TEMPLATES_HREF,
+  briefingDetailHref,
+} from '@/constants/navigation';
 import { useAgency } from '@/hooks/use-agency';
 import { useAuth } from '@/hooks/use-auth';
+import { listBriefingCategories } from '@/services/briefing-categories';
 import {
   BriefingServiceError,
   listBriefings,
 } from '@/services/briefings';
 import { listAgencyShifts } from '@/services/shifts';
 import { colors, layout, spacing } from '@/theme';
+import {
+  buildCategoryFilterOptions,
+  canManageBriefingCatalog,
+  resolveCategoryFilterKey,
+  type BriefingCategory,
+} from '@/types/briefingCategories';
 import {
   DEFAULT_BRIEFING_FILTERS,
   hasActiveBriefingFilters,
@@ -42,10 +54,11 @@ import {
 
 export default function BriefingsListScreen() {
   const { user } = useAuth();
-  const { currentAgency, isLoading: agencyLoading } = useAgency();
+  const { currentAgency, currentMembership, isLoading: agencyLoading } = useAgency();
   const params = useLocalSearchParams<{ shift?: string | string[] }>();
   const agencyId = currentAgency?.id ?? null;
   const userId = user?.id ?? null;
+  const canManageCatalog = canManageBriefingCatalog(currentMembership?.role);
   const shiftParam =
     typeof params.shift === 'string' ? params.shift : params.shift?.[0] ?? '';
 
@@ -57,6 +70,7 @@ export default function BriefingsListScreen() {
   const [items, setItems] = useState<BriefingWithMeta[]>([]);
   const [optionSource, setOptionSource] = useState<BriefingWithMeta[]>([]);
   const [agencyShifts, setAgencyShifts] = useState<AgencyShift[]>([]);
+  const [agencyCategories, setAgencyCategories] = useState<BriefingCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -155,19 +169,22 @@ export default function BriefingsListScreen() {
         if (!cancelled) {
           void load(hasLoadedOnceRef.current ? 'refresh' : 'initial');
           if (agencyId) {
-            void listAgencyShifts({ agencyId, includeInactive: false })
-              .then((rows) => {
-                if (!cancelled) {
-                  setAgencyShifts(rows);
-                }
-              })
-              .catch(() => {
-                if (!cancelled) {
-                  setAgencyShifts([]);
-                }
-              });
+            void Promise.all([
+              listAgencyShifts({ agencyId, includeInactive: false }).catch(
+                () => [] as AgencyShift[],
+              ),
+              listBriefingCategories({ agencyId, includeInactive: false }).catch(
+                () => [] as BriefingCategory[],
+              ),
+            ]).then(([shifts, categories]) => {
+              if (!cancelled) {
+                setAgencyShifts(shifts);
+                setAgencyCategories(categories);
+              }
+            });
           } else {
             setAgencyShifts([]);
+            setAgencyCategories([]);
           }
         }
       });
@@ -200,15 +217,31 @@ export default function BriefingsListScreen() {
     return shiftFilterOptions.find((option) => option.key === key)?.label ?? filters.shift ?? 'all';
   }, [filters.shift, shiftFilterOptions]);
 
-  const categoryOptions = useMemo(() => {
-    const values = new Set<string>();
-    for (const item of optionSource) {
-      if (item.category?.trim()) {
-        values.add(item.category.trim());
-      }
+  const categoryFilterOptions = useMemo(
+    () =>
+      buildCategoryFilterOptions({
+        agencyCategories,
+        historicalNames: optionSource.map((item) => item.category),
+      }),
+    [agencyCategories, optionSource],
+  );
+
+  const categoryOptions = useMemo(
+    () => categoryFilterOptions.map((option) => option.label),
+    [categoryFilterOptions],
+  );
+
+  const normalizedCategoryFilter = useMemo(() => {
+    const key = resolveCategoryFilterKey(filters.category, categoryFilterOptions);
+    if (key === 'all') {
+      return 'all';
     }
-    return [...values].sort((a, b) => a.localeCompare(b));
-  }, [optionSource]);
+    return (
+      categoryFilterOptions.find((option) => option.key === key)?.label ??
+      filters.category ??
+      'all'
+    );
+  }, [categoryFilterOptions, filters.category]);
 
   const showAgencyLoading = agencyLoading || (!currentAgency && !hasLoadedOnce && !errorMessage);
 
@@ -245,23 +278,50 @@ export default function BriefingsListScreen() {
         </AppText>
       </View>
 
-      <AppButton
-        label="New briefing"
-        onPress={() => router.push(BRIEFINGS_CREATE_HREF)}
-        style={styles.newButton}
-      />
+      <View style={styles.toolbar}>
+        <AppButton
+          label="New briefing"
+          onPress={() => router.push(BRIEFINGS_CREATE_HREF)}
+          style={styles.newButton}
+        />
+        {canManageCatalog ? (
+          <>
+            <AppButton
+              label="Manage categories"
+              variant="ghost"
+              onPress={() => router.push(BRIEFINGS_CATEGORIES_HREF)}
+            />
+            <AppButton
+              label="Templates"
+              variant="ghost"
+              onPress={() => router.push(BRIEFINGS_TEMPLATES_HREF)}
+            />
+          </>
+        ) : null}
+      </View>
 
       <BriefingFiltersBar
-        filters={{ ...filters, shift: normalizedShiftFilter }}
+        filters={{
+          ...filters,
+          shift: normalizedShiftFilter,
+          category: normalizedCategoryFilter,
+        }}
         shiftOptions={shiftOptions}
         categoryOptions={categoryOptions}
         onChange={(next) => {
-          const key = resolveShiftFilterKey(next.shift, shiftFilterOptions);
-          const label =
-            key === 'all'
+          const shiftKey = resolveShiftFilterKey(next.shift, shiftFilterOptions);
+          const shiftLabel =
+            shiftKey === 'all'
               ? 'all'
-              : (shiftFilterOptions.find((option) => option.key === key)?.label ?? next.shift);
-          setFilters({ ...next, shift: label });
+              : (shiftFilterOptions.find((option) => option.key === shiftKey)?.label ??
+                next.shift);
+          const categoryKey = resolveCategoryFilterKey(next.category, categoryFilterOptions);
+          const categoryLabel =
+            categoryKey === 'all'
+              ? 'all'
+              : (categoryFilterOptions.find((option) => option.key === categoryKey)?.label ??
+                next.category);
+          setFilters({ ...next, shift: shiftLabel, category: categoryLabel });
         }}
       />
 
@@ -320,6 +380,7 @@ export default function BriefingsListScreen() {
           <View style={styles.cardWrap}>
             <BriefingCard
               briefing={item}
+              categories={agencyCategories}
               onPress={() => router.push(briefingDetailHref(item.id))}
             />
           </View>
@@ -349,6 +410,12 @@ const styles = StyleSheet.create({
   },
   headingBlock: {
     gap: spacing.sm,
+  },
+  toolbar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    alignItems: 'center',
   },
   newButton: {
     alignSelf: 'flex-start',
